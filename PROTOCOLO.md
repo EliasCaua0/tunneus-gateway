@@ -148,8 +148,6 @@ Direção: Gateway → ESP
 
 | Campo | Tipo | Descrição |
 | --- | --- | --- |
-| type | string | Sempre "command" |
-| command_id | string | ID da operação |
 | cmd | string | Comando a executar |
 | args | object | Opcional (v4.1). Parâmetros do |
 |   |   | comando; ausente quando não há. |
