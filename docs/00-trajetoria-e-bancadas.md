@@ -23,7 +23,7 @@ O desenvolvimento adotou ciclos iterativos de **Exploração, Lapidação e Extr
 
 ## 0.2 Marcos da evolução
 
-O caderno de campo preserva a cronologia e o contexto das decisões. Em síntese, a evolução percorreu as seguintes etapas:
+ Em síntese, a evolução percorreu as seguintes etapas:
 
 | Etapa | Resultado principal |
 |---|---|
