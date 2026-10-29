@@ -68,6 +68,12 @@ flowchart LR
 as mensagens Command e Result percorrem o WebSocket aberto pelo próprio
 agente.
 
+O acesso remoto via Tailscale acrescenta uma camada de conectividade
+privada entre o operador autorizado e o Gateway, sem alterar esses quatro
+canais nem criar comunicação direta entre navegador e ESP32. O
+funcionamento remoto já existe e está em otimização; a operação local
+continua independente de Internet.
+
 **Tabela 3 — Função de cada canal**
 
 | Canal                | Direção             | Conteúdo                                                | Duração                                   |

@@ -49,16 +49,17 @@ retenção aproximada de 30 min, e não sobrevivem ao reinício do processo.
 
 ## 12.2 Topologia de implantação
 
-Uma instalação típica reúne navegador, Gateway e agentes na mesma rede
+A base da instalação reúne navegador, Gateway e agentes na mesma rede
 local roteável. O Gateway escuta TCP 18080 para HTTP, SSE, dashboard e
 WebSocket; os agentes escutam UDP 18081 para Wake. O endereço usado no
 firmware é o do Gateway, enquanto o Registry mantém o último IP
-conhecido de cada agente.
+conhecido de cada agente. Um operador remoto autorizado também pode
+alcançar o Gateway por uma rede privada Tailscale.
 
 ```mermaid
-flowchart LR
+flowchart TB
  subgraph LAN[Rede local do laboratorio]
-  B[Navegador do operador] -->|TCP 18080 HTTP e SSE| S[Servidor Tunneus Gateway]
+  B[Navegador do operador local] -->|TCP 18080 HTTP e SSE| S[Servidor Tunneus Gateway]
   S -->|UDP 18081 Wake| A1[ESP32 Agente 01]
   S -->|UDP 18081 Wake| A3[ESP32 Agente 03]
   A1 -->|TCP 18080 /ws| S
@@ -66,12 +67,26 @@ flowchart LR
   S --> F[web/dashboard]
   S --> R[registry.json]
  end
+ U[Operador remoto autorizado] -->|Rede privada Tailscale| S
  B -.sem Internet.-> L[Rede local autonoma]
 ```
 
 **Figura 24** — Topologia de implantação. O navegador nunca precisa
 conhecer o IP do ESP32; o agente, por sua vez, conhece o endereço do
-Gateway para abrir o WebSocket.
+Gateway para abrir o WebSocket. O acesso remoto utiliza a rede privada e
+não altera o protocolo entre Gateway e agentes.
+
+### Acesso remoto e arquitetura semi-offline
+
+O acesso via Tailscale já funciona: o operador e o Gateway integram uma
+rede privada e o dashboard pode ser alcançado por um endereço privado
+autorizado. Essa conectividade não exige exposição direta do serviço à
+Internet e não modifica Wake, Hello, Command ou Result.
+
+A capacidade remota ainda precisa ser otimizada e aprimorada em sua
+experiência operacional, robustez e administração. O princípio permanece:
+a rede local sustenta o sistema de forma autônoma, e o acesso externo é
+uma extensão controlada, não uma dependência para toda operação.
 
 ## 12.3 Preparação por etapas
 

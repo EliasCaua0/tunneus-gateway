@@ -13,11 +13,20 @@ dispositivos físicos. Ele recebe uma intenção — por exemplo, ler
 sensores ou movimentar um motor —, convoca o agente correspondente,
 estabelece uma sessão temporária e devolve o resultado à interface.
 
-O sistema pertence ao ecossistema ArcanLab e foi estruturado para
-funcionar em rede local, sem depender de Internet. Essa característica
-aproxima o projeto de bancadas didáticas e experimentos de laboratório:
-a comunicação pode ser observada, os componentes podem ser alterados e
-toda a cadeia permanece sob controle do experimento.
+O sistema pertence ao ecossistema ArcanLab e adota uma arquitetura
+**semi-offline**: a operação principal funciona em rede local, sem
+depender de Internet, e o acesso remoto já pode ser realizado por uma
+rede privada Tailscale. Esse acesso remoto está em aprimoramento e não
+substitui a autonomia local. Bancadas didáticas e experimentos de
+laboratório tornam a comunicação observável, mantendo os componentes sob
+controle do experimento.
+
+Os protótipos são aplicações do Tunneus, não o projeto em si. Eles têm
+papel de experimentação e teste do núcleo comum. O caderno de campo
+registra a evolução até a primeira versão estável apresentada em feira;
+seus dados históricos são oriundos da bancada real e não devem ser
+confundidos com os valores sintéticos do mock. A [trajetória do projeto](00-trajetoria-e-bancadas.md)
+apresenta essa distinção em detalhes.
 
 ```mermaid
 flowchart LR
@@ -79,7 +88,8 @@ um conjunto de regras específicas de sensores e atuadores.
 
 ### Delimitação do experimento
 
--   Operação em rede local.
+-   Operação local autônoma e acesso remoto via Tailscale, em otimização.
+-   Protótipos utilizados como instrumentos de experimentação do sistema.
 -   Sem heartbeat permanente.
 -   Sem telemetria contínua para o Gateway.
 -   Histórico visual somente no navegador.

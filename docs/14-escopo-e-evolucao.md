@@ -18,7 +18,7 @@ firmware, sem alterar os contratos centrais.
 
 | Dimensão     | Forma atual                                       | Consequência arquitetural                              |
 |--------------|---------------------------------------------------|--------------------------------------------------------|
-| Comunicação  | Rede local, HTTP, SSE, UDP e WebSocket.           | Operação autônoma sem Internet.                        |
+| Comunicação  | Rede local e acesso remoto privado via Tailscale. | Operação semi-offline; acesso remoto em otimização.    |
 | Dispositivos | Gateway multiagente e dashboard especializado.    | Núcleo comum com apresentação dedicada à bancada.      |
 | Aquisição    | Cache local e leituras sob demanda.               | Sem streaming contínuo para o Gateway.                 |
 | Histórico    | Memória do navegador, até 1000 pontos e 24 h.     | Visualização da sessão, sem banco de séries temporais. |
@@ -38,7 +38,7 @@ abandonar o modelo de convocação e operação local.
 | Telemetria   | Dados estruturados, timestamp do dispositivo, latência e métricas. | Histórico mais rico e comparação entre experimentos.      |
 | Bancada      | Novas grandezas, conclusão do movimento e leitura de posição.      | Mais formas de aquisição e realimentação física.          |
 | Multiagente  | Seleção de dispositivos e composição por capabilities.             | Vários experimentos apresentados sobre o mesmo núcleo.    |
-| Comunicação  | Descoberta UDP, comandos em batch e integração MQTT.               | Configuração simplificada e integração externa.           |
+| Comunicação  | Otimização do acesso via Tailscale, descoberta UDP e integrações.  | Acesso remoto mais robusto e configuração simplificada.   |
 | Persistência | Histórico de operações e séries temporais.                         | Consulta posterior e acompanhamento de longa duração.     |
 | Pesquisa     | OTA, deep sleep, mesh e protocolos binários.                       | Novos compromissos entre energia, desempenho e autonomia. |
 
