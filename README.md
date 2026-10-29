@@ -28,7 +28,7 @@ A arquitetura funciona em rede local sem depender de Internet. O acesso remoto p
 
 ## Trajetória, experimentos e evidências
 
-O projeto surgiu no ecossistema ArcanLab e evoluiu por ciclos de exploração, lapidação e extração. O caderno de campo registra essa trajetória desde a concepção até a primeira versão estável apresentada em feira, preservando decisões, experimentos e resultados do desenvolvimento.
+O projeto surgiu no ecossistema ArcanLab e evoluiu por ciclos de uma metodologia de 3 etapas: exploração, lapidação e extração. O caderno de campo registra essa trajetória desde a concepção até a primeira versão estável apresentada, preservando decisões, experimentos e resultados do desenvolvimento.
 
 O **Agente 03** é uma das aplicações dessa evolução: uma bancada com sensores e motor de passo utilizada para exercitar comunicação, telemetria e acionamento por meio do mesmo núcleo Tunneus. Os dados históricos registrados no caderno de campo são provenientes da **bancada real**. Em contraste, os valores produzidos pelo Mock Gateway incluído no repositório são **sintéticos** e servem somente à verificação controlada da interface.
 
