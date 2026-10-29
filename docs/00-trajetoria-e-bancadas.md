@@ -39,7 +39,7 @@ O desenvolvimento adotou ciclos iterativos de **Exploração, Lapidação e Extr
 | Aplicações de bancada | Evolução para agentes com LED, sensores e atuadores, incluindo o Agente 03. |
 | Primeira versão estável apresentada | Consolidação do sistema para demonstração em feira e continuidade do desenvolvimento. |
 
-As primeiras versões utilizavam conexões persistentes e heartbeat. A arquitetura atual, descrita nos capítulos seguintes, evoluiu para **Subagente Passivo + Pico de Conexão**, com Wake UDP, sessão WebSocket temporária e autenticação por desafio. Essa diferença mostra que o caderno registra a construção do conhecimento, enquanto a documentação técnica atual descreve o comportamento da versão mais recente.
+As primeiras versões utilizavam conexões persistentes e heartbeat. A arquitetura atual, descrita nos capítulos seguintes, evoluiu para **Subagente Passivo + Pico de Conexão**, com Wake UDP, sessão WebSocket temporária e autenticação por desafio. Essa diferença mostra que os registros trazem a construção do conhecimento, enquanto a documentação técnica atual descreve o comportamento da versão mais recente.
 
 ## 0.3 O projeto não se confunde com seus protótipos
 
