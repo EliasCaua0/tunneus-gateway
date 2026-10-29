@@ -65,7 +65,7 @@ Essa capacidade ainda requer otimização e aprimoramento. A evolução consiste
 
 ## 0.6 Fonte histórica
 
-A trajetória foi consolidada a partir do documento **Caderno de campo**, registro cronológico da pesquisa, complementado pelas informações atuais do projeto. O documento original é um material de acompanhamento e não foi incorporado como arquivo binário a este repositório.
+A trajetória foi consolidada a partir de documentos como o **Caderno De Campo`**, com registros cronológico da pesquisa, complementado pelas informações atuais do projeto. O documento original é um material de acompanhamento e não foi incorporado como arquivo binário a este repositório.
 
 ---
 
