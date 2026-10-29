@@ -1,11 +1,12 @@
 # Documentação técnica do Tunneus
 
-Esta documentação apresenta o sistema de forma progressiva. Cada capítulo parte de uma pergunta e acrescenta um nível de detalhe, permitindo primeiro compreender a arquitetura e depois consultar a implementação.
+Esta documentação apresenta o sistema de forma progressiva a professores, avaliadores e colaboradores autorizados. Cada capítulo parte de uma pergunta e acrescenta um nível de detalhe, permitindo primeiro compreender a trajetória e a arquitetura e depois consultar a implementação. O repositório tem finalidade expositiva; não constitui uma distribuição de código aberto.
 
 ## Trilha recomendada
 
 ### 1. Compreender o sistema
 
+0. [Trajetória do projeto e papel das bancadas](00-trajetoria-e-bancadas.md)
 1. [Visão geral: o que é o Tunneus](01-visao-geral.md)
 2. [Arquitetura: quem conversa com quem](02-arquitetura.md)
 3. [Uma operação de ponta a ponta](03-operacao-ponta-a-ponta.md)
@@ -49,5 +50,8 @@ Esta documentação apresenta o sistema de forma progressiva. Cada capítulo par
 - Comandos e campos aparecem em fonte monoespaçada.
 - Secrets e endereços dos exemplos são demonstrativos.
 - Os dados produzidos pelo Mock Gateway são sintéticos e não representam medições físicas.
+- Os dados históricos do caderno de campo são provenientes da bancada real.
+- Os protótipos são instrumentos de experimentação e teste; o projeto central é o Tunneus.
+- O acesso remoto via Tailscale já existe e permanece em otimização.
 
-Para uma primeira apresentação, recomenda-se ler os capítulos 1 a 4 e, em seguida, executar a demonstração descrita no [README principal](../README.md).
+Para uma primeira apresentação, recomenda-se ler os capítulos 0 a 4 e, em seguida, executar a demonstração descrita no [README principal](../README.md).
