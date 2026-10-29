@@ -172,7 +172,7 @@ O limite existe porque o ESP32 interpreta a mensagem em um documento JSON de tam
 
 Requisição REST correspondente: POST /api/agents/{id}/command com {"cmd":"MOVER","args":{...}}. O campo args é repassado sem alteração e também aparece no evento SSE command_created.
 
-### Capability MOVER (Agente 03, firmware v4.4)
+### Capability MOVER (Agente 03, firmware v4.4) *Exemplo*
 
 Executa um número fixo de passos do motor de passo.
 
