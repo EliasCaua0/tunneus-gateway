@@ -1,0 +1,21 @@
+*.exe
+*.out
+*.log
+
+.env
+
+bin/
+
+vendor/
+tunneus-gateway
+
+# Configuracao local e credenciais
+registry.json
+*.local.json
+secrets.*
+
+# Artefatos de verificacao e build
+tests/dashboard/shots/
+*.pdf
+__pycache__/
+.pytest_cache/

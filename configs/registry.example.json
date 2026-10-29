@@ -1,0 +1,62 @@
+[
+  {
+    "agent_id": "esp32-01",
+    "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "last_ip": "192.168.1.101",
+    "mac": "",
+    "capabilities": [
+      "LED_ON",
+      "LED_OFF"
+    ],
+    "last_seen": "0001-01-01T00:00:00Z",
+    "status": "standby",
+    "firmware_ver": "",
+    "name": "Protótipo LED 01",
+    "type": "led",
+    "icon": "💡",
+    "description": "Subagente ESP32 — Controle de LED onboard"
+  },
+  {
+    "agent_id": "esp32-02",
+    "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "last_ip": "192.168.1.102",
+    "mac": "",
+    "capabilities": [
+      "LIGAR",
+      "ELEVAÇÃO A",
+      "ELEVAÇÃO B",
+      "DESLIGAR"
+    ],
+    "last_seen": "0001-01-01T00:00:00Z",
+    "status": "standby",
+    "firmware_ver": "",
+    "name": "Agente 02 — Polias Industriais",
+    "type": "industrial",
+    "icon": "⚙️",
+    "description": "Controle de elevação por polias (Ponte H)"
+  },
+  {
+    "agent_id": "esp32-03",
+    "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "last_ip": "192.168.1.103",
+    "mac": "",
+    "capabilities": [
+      "LER_SENSORES",
+      "TEMPERATURA",
+      "PRESSAO",
+      "ALTITUDE",
+      "CORRENTE",
+      "DISTANCIA",
+      "START",
+      "PARE",
+      "MOVER"
+    ],
+    "last_seen": "0001-01-01T00:00:00Z",
+    "status": "standby",
+    "firmware_ver": "4.4",
+    "name": "Agente 03 — Bancada Sensores + Motor de Passo",
+    "type": "sensor_motor",
+    "icon": "📊",
+    "description": "Bancada de sensores (BMP180, ACS712, HC-SR04) com motor de passo controlado"
+  }
+]
