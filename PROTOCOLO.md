@@ -21,6 +21,40 @@ O subagente (ESP32) nunca inicia conexões. Ele permanece em STANDBY ouvindo UDP
 
 ## 2. Fluxo Completo
 
+O exemplo abaixo representa uma leitura do `esp32-03`. O mesmo ciclo é usado pelas demais capabilities, respeitando os argumentos e as regras específicas de cada comando.
+
+1. O operador solicita `LER_SENSORES` no dashboard.
+2. O dashboard envia `POST /api/agents/esp32-03/command` com `{"cmd":"LER_SENSORES"}`.
+3. O Gateway valida o agente e a capability, cria a operação com um `op_id` e responde HTTP 202. Esse retorno confirma o aceite, não a conclusão da leitura.
+4. O Controller cria uma sessão com `session_id` e `challenge` exclusivos e envia o Wake por UDP para o `last_ip` do agente, porta 18081.
+5. O ESP32, em `STANDBY`, valida `type`, `agent_id` e `auth_mac`. Se a convocação for válida, passa a `CONNECTING` e abre WebSocket em `ws://<gateway>:18080/ws`.
+6. O agente envia `Hello` com o mesmo `session_id` e o `challenge_response` calculado com sua secret.
+7. O Gateway valida a sessão e o HMAC, envia `Welcome` e libera a sessão autenticada para o Controller.
+8. O Controller envia `Command` com `command_id` igual ao `op_id` e `cmd` igual a `LER_SENSORES`.
+9. O firmware realiza uma aquisição nova dos sensores e responde `Result` com os valores em `stdout`; erros, quando existentes, são informados em `stderr`.
+10. O Gateway conclui a operação e publica o resultado por SSE. O dashboard interpreta o texto, atualiza as cinco grandezas e acrescenta as amostras aos gráficos locais.
+11. O ESP32 envia `Bye` com `reason` igual a `completed`, fecha o WebSocket e retorna a `STANDBY`, permanecendo novamente apenas com o UDP aberto.
+
+```mermaid
+sequenceDiagram
+    participant D as Dashboard
+    participant G as Tunneus Gateway
+    participant E as ESP32 Agente 03
+
+    D->>G: POST /api/agents/esp32-03/command
+    G-->>D: HTTP 202 + op_id
+    G->>E: Wake UDP 18081 + session_id + challenge + auth_mac
+    E->>G: WebSocket /ws + Hello + challenge_response
+    G->>E: Welcome + sessão autenticada
+    G->>E: Command + command_id + LER_SENSORES
+    E->>G: Result + stdout + stderr
+    G-->>D: SSE + resultado da operação
+    E->>G: Bye + completed
+    E-->>E: WebSocket fechado e retorno a STANDBY
+```
+
+HTTP, SSE e WebSocket utilizam TCP 18080; o UDP 18081 é reservado à convocação. Timeouts e tentativas seguem as seções 4 e 5. Para `MOVER`, depois de `command_sent`, a ausência de `Result` não provoca reenvio automático, conforme a seção 5.1.
+
 ## 3. Mensagens
 
 ## 3.1 Wake Packet (UDP)
