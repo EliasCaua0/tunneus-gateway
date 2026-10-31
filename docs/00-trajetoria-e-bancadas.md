@@ -35,7 +35,7 @@ O desenvolvimento adotou ciclos iterativos de **Exploração, Lapidação e Extr
 | Implementação em Go | Organização modular do Gateway e dos primeiros componentes de comunicação. |
 | Testes digitais | Comunicação entre cliente de terminal e Gateway antes da introdução do hardware. |
 | Primeiro agente físico | Preparação do firmware e integração de um ESP32 à infraestrutura. |
-| Comunicação local com ESP32 | Estabelecimento da comunicação com o Gateway e preparação para experimentos posteriores. |
+| Comunicação local e remota com ESP32 | Estabelecimento da comunicação com o Gateway e preparação para experimentos posteriores. |
 | Aplicações de bancada | Evolução para agentes com LED, sensores e atuadores, incluindo o Agente 03. |
 | Primeira versão estável apresentada | Consolidação do sistema para demonstração em feira e continuidade do desenvolvimento. |
 
