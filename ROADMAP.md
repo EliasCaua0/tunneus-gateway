@@ -58,7 +58,7 @@ A ordem e o momento de execução das melhorias serão definidos com base em jus
   - Permitir enviar 2+ comandos em uma única sessão WS
   - Reduz overhead de abrir/fechar conexão
 
-- [ ] **Dashboard melhorado**
+- [x] **Dashboard melhorado**
   - Gráfico de operações ao longo do tempo
   - Status de múltiplos agentes simultâneos
   - Controles por agente (não apenas um)
