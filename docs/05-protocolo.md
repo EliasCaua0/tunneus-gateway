@@ -1,53 +1,123 @@
-# Protocolo Tunneus v4.1
+[← Índice da documentação](README.md)
 
-A especificação normativa das mensagens está em [PROTOCOLO.md](../PROTOCOLO.md). Este capítulo explica como interpretá-la.
+# 5. Protocolo Tunneus V4.1
 
-## 1. Canais
+> **Neste capítulo:** Depois de acompanhar o percurso completo, cada
+> mensagem passa a ser examinada pelo seu formato, direção e função. O
+> protocolo é o vocabulário comum entre Gateway e firmware.
 
-| Canal | Porta | Uso |
-|---|---|---|
-| HTTP REST | TCP 18080 | API e dashboard |
-| SSE | TCP 18080 | Eventos para o navegador |
-| WebSocket | TCP 18080 | Sessão temporária do agente |
-| UDP Wake | UDP 18081 | Convocação do agente |
+## 5.1 Seis mensagens, uma conversa curta
 
-## 2. Famílias de mensagens
+As mensagens são JSON textual. O campo `type` seleciona a estrutura
+seguinte, e os demais campos carregam identidade, autenticação, comando
+ou resultado. A conversa nominal utiliza seis tipos: Wake, Hello,
+Welcome, Command, Result e Bye.
 
 ```mermaid
 flowchart LR
-    G["Gateway"] -->|"wake"| E["ESP32"]
-    E -->|"hello"| G
-    G -->|"welcome"| E
-    G -->|"command"| E
-    E -->|"result"| G
-    E -->|"bye"| G
-    G -->|"error"| E
-    E -->|"error"| G
+ W[wake: convocação] --> H[hello: prova do desafio]
+ H --> V[welcome: sessão autenticada]
+ V --> C[command: capability + args]
+ C --> R[result: stdout + stderr]
+ R --> B[bye: encerramento]
+ W -.UDP.-> W
+ H -.WebSocket.-> B
 ```
 
-`wake` usa UDP. As demais mensagens operacionais usam WebSocket.
+**Figura 9** — Vocabulário do protocolo. O Wake viaja por UDP; os cinco
+tipos seguintes utilizam o WebSocket temporário.
 
-## 3. Envelopes
+**Tabela 7 — Mensagens, campos e finalidade**
 
-Todas as mensagens usam JSON e um campo `type`. A sessão é identificada por `session_id`; o comando usa `command_id`.
+| Tipo      | Direção            | Campos principais                                      | Função                                                   |
+|-----------|--------------------|--------------------------------------------------------|----------------------------------------------------------|
+| `wake`    | Gateway → ESP, UDP | `agent_id`, `session_id`, `challenge`, `auth_mac`.     | Convocar e comprovar conhecimento da secret.             |
+| `hello`   | ESP → Gateway, WS  | Identidades, `challenge_response`, `agent`, `version`. | Apresentar a sessão e responder ao desafio.              |
+| `welcome` | Gateway → ESP, WS  | `session`, `authenticated`.                            | Confirmar autenticação e habilitar a espera por Command. |
+| `command` | Gateway → ESP, WS  | `command_id`, `cmd`, `args?`.                          | Solicitar uma capability.                                |
+| `result`  | ESP → Gateway, WS  | `command_id`, `stdout`, `stderr`.                      | Entregar o resultado textual.                            |
+| `bye`     | ESP → Gateway, WS  | `session_id`, `reason`.                                | Encerrar a sessão e indicar o motivo.                    |
 
-No firmware de referência, o `command_id` é comparado à sessão ativa. O Gateway usa o `op_id` como `command_id` do Command.
+## 5.2 Wake: a convocação autenticada
 
-## 4. Result
+Para cada tentativa, o Gateway gera 32 bytes criptograficamente
+aleatórios e os representa em 64 caracteres hexadecimais. Também cria um
+novo UUID de sessão. O campo `auth_mac` autentica a concatenação
+`challenge || agent_id`, sem separador. O pacote é enviado ao `last_ip`
+cadastrado, porta UDP 18081.
 
-O Result contém:
+    {
+      "type":"wake",
+      "agent_id":"esp32-03",
+      "session_id":"UUID-DA-TENTATIVA",
+      "challenge":"64_CARACTERES_HEX",
+      "auth_mac":"HMAC_SHA256_EM_HEX"
+    }
 
-- `status`: `success` ou `error`;
-- `stdout`: saída textual;
-- `stderr`: erro textual;
-- `exit_code`: código numérico.
+O firmware confere tipo, identidade e campos, rejeita uma sessão já
+presente em seu pequeno cache e recalcula o HMAC. Se a verificação for
+aceita, armazena sessão e challenge, fecha temporariamente a escuta UDP
+e entra em CONNECTING.
 
-O dashboard interpreta formatos textuais específicos de `stdout`. O protocolo transporta texto; a semântica das grandezas pertence ao firmware e ao parser.
+## 5.3 Hello e Welcome: a sessão é comprovada
 
-## 5. Error
+O Hello deve ser a primeira mensagem depois do upgrade WebSocket. Ele
+repete agente e sessão e apresenta
+`challenge_response = HMAC-SHA256(secret, challenge)`. O handler procura
+uma sessão pendente, busca a secret do agente no Registry e compara os
+códigos com `hmac.Equal`.
 
-Erros possuem código, mensagem e, quando aplicável, sessão. Um erro de protocolo não deve ser confundido com HTTP 202 ou com `status: error` de um Result.
+Quando a validação é concluída, o handler associa a conexão à sessão,
+envia Welcome e chama `NotifyAuth`. Esse aviso libera a espera do
+Controller, que então pode enviar o Command. O campo `version` informa o
+firmware, mas não há negociação automática de versão no envelope.
 
-## 6. Compatibilidade
+## 5.4 Command e argumentos opcionais
 
-Uma capability cadastrada não garante que qualquer firmware aceite os mesmos argumentos. O contrato completo depende da versão do protocolo, do firmware e do parser do dashboard.
+A V4.1 acrescenta `args` sem quebrar comandos antigos. Quando o mapa
+está ausente ou vazio, o campo é omitido do JSON. O Gateway valida
+apenas a estrutura; regras como direção, velocidade e quantidade de
+passos pertencem ao firmware.
+
+**Tabela 8 — Limites estruturais de args no Gateway**
+
+| Regra              | Limite                           | Exemplo                                |
+|--------------------|----------------------------------|----------------------------------------|
+| Número de campos   | Até 8.                           | `dir`, `steps`, `speed`.               |
+| Nome do campo      | 1 a 24 caracteres.               | Chaves curtas e explícitas.            |
+| Tipos aceitos      | String, número JSON ou booleano. | Objetos, listas e null são recusados.  |
+| String             | Até 32 caracteres.               | `"direita"`, `"normal"`.               |
+| Serialização total | Até 256 bytes.                   | HTTP 400 antes da operação se exceder. |
+
+    {"type":"command","command_id":"UUID_DA_OPERACAO",
+     "cmd":"MOVER","args":{"dir":"direita","steps":200,"speed":"normal"}}
+
+No Agente 03, `MOVER` exige direção `direita` ou `esquerda`, passos
+inteiros entre 1 e 30000 e velocidade `lenta`, `normal` ou `rapida`. A
+validação ocorre antes de alterar DIR ou PUL.
+
+## 5.5 Result e Bye: retorno e encerramento
+
+O Result utiliza o mesmo `command_id` do Command e separa dois canais
+textuais. `stdout` carrega o valor ou a descrição de sucesso; `stderr`
+explica uma recusa ou condição inválida. Essa separação permite que o
+dashboard diferencie uma amostra válida de uma ocorrência sem número.
+
+    {"type":"result","command_id":"UUID_DA_OPERACAO",
+     "stdout":"23.45 C","stderr":""}
+
+O Bye contém sessão e motivo. O Agente 01 envia Bye imediatamente após
+Result. O Agente 03 aguarda até 5 s na etapa ACK e utiliza `ack_timeout`
+quando encerra por tempo. Nos dois casos, a sessão é removida e o
+dispositivo retorna à escuta UDP. **Em síntese:** Wake convoca; Hello
+responde ao desafio; Welcome libera a conversa; Command solicita; Result
+devolve; Bye encerra.
+
+## Código e referências relacionadas
+
+- [Especificação original](../PROTOCOLO.md)
+- [Mensagens e argumentos](../internal/protocol/command.go)
+
+---
+
+[Voltar ao índice da documentação](README.md)

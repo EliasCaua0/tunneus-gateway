@@ -1,80 +1,142 @@
-# Operação ponta a ponta
+[← Índice da documentação](README.md)
 
-Esta seção acompanha uma leitura completa do Agente 03, desde o clique até o gráfico.
+# 3. Uma operação de ponta a ponta
 
-## 1. Cenário
+> **Exemplo guiado:** Uma leitura de `TEMPERATURA` no Agente 03 será
+> acompanhada desde o clique até a atualização do gráfico. Esse exemplo
+> funciona como referência para todos os capítulos seguintes.
 
-- Agente: `esp32-03`.
-- Comando: `LER_SENSORES`.
-- Gateway: TCP 18080.
-- Wake: UDP 18081.
-- Registry: agente cadastrado com capability compatível e `last_ip` conhecido.
+## 3.1 Primeiro, o percurso sem detalhes internos
 
-## 2. Sequência completa
+Ao clicar em “Ler” no cartão de temperatura, o operador não recebe
+imediatamente o valor do sensor. Primeiro, o Gateway aceita a intenção e
+cria uma operação. Depois, convoca o agente, autentica uma sessão,
+entrega o comando e aguarda o Result. Somente quando esse resultado
+retorna por SSE o dashboard cria a amostra. 
+
+```mermaid
+flowchart LR
+ A[Clique em Ler] --> B[Operação aceita]
+ B --> C[Agente convocado]
+ C --> D[Sessão autenticada]
+ D --> E[Comando executado]
+ E --> F[Resultado publicado]
+ F --> G[Gráfico atualizado]
+```
+
+**Figura 4** — Percurso simplificado de uma leitura. O aceite acontece
+antes da comunicação com o agente; o valor aparece apenas depois do
+Result e do processamento no navegador.
+
+## 3.2 O mesmo exemplo, agora passo a passo
+
+1.  **Intenção.** O dashboard envia `POST /api/agents/esp32-03/command`
+    com `{"cmd":"TEMPERATURA"}`.
+2.  **Validação.** O Controller verifica se o agente existe e se a
+    capability está cadastrada no Registry.
+3.  **Aceite assíncrono.** Uma operação recebe UUID e é armazenada. A
+    API responde HTTP 202 com `op_id`, enquanto a execução continua em
+    uma goroutine.
+4.  **Convocação.** O Gateway cria `session_id` e challenge, calcula o
+    WakeMAC e envia o Wake por UDP ao último IP conhecido do agente.
+5.  **Resposta do dispositivo.** O ESP32 valida o Wake, abre WebSocket
+    para `/ws` e envia Hello com a resposta HMAC do challenge.
+6.  **Autenticação.** O handler verifica sessão, identidade e
+    HelloResponse. Se tudo for válido, envia Welcome e avisa ao
+    Controller.
+7.  **Execução.** O Controller envia Command com o `command_id` da
+    operação. O firmware consulta o valor de temperatura em seu cache.
+8.  **Resultado.** O agente responde, por exemplo, `stdout: "23.45 C"`.
+    O Controller publica `result_received` por SSE.
+9.  **Apresentação.** O dashboard confere número e unidade, registra a
+    amostra na memória e redesenha o gráfico.
+10. **Encerramento.** O agente envia Bye, os recursos da sessão são
+    liberados e o ESP32 retorna a STANDBY com UDP ativo.
+
+**Tabela 4 — O que cada etapa comprova**
+
+| Marco             | O que significa                                   | O que ainda não significa                                  |
+|-------------------|---------------------------------------------------|------------------------------------------------------------|
+| HTTP 202          | A intenção foi aceita e recebeu um identificador. | Não comprova que o agente recebeu ou executou o comando.   |
+| `wake_sent`       | O Controller entrou na etapa de convocação.       | Não comprova que o ESP32 validou o Wake.                   |
+| `auth_ok`         | O Hello foi validado e a sessão está autenticada. | Não comprova que a capability já foi executada.            |
+| `command_sent`    | O Command foi escrito no WebSocket.               | Não é o resultado da operação.                             |
+| `result_received` | O Result chegou ao Controller e foi publicado.    | Em MOVER, confirma o início, não a conclusão do movimento. |
+
+## 3.3 Sequência completa da comunicação
+
+A figura seguinte acrescenta os componentes que participam da conversa.
+O Controller coordena a operação; o Wake Sender transmite o datagrama; o
+WebSocket Handler autentica e recebe mensagens; o dashboard acompanha os
+eventos. O retorno HTTP 202 ocorre no início, sem aguardar as etapas
+seguintes.
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant U as Operador
-    participant D as Dashboard
-    participant A as API
-    participant C as Controller
-    participant W as Wake UDP
-    participant E as ESP32
-    participant H as WebSocket
-    participant S as SSE
-
-    U->>D: Seleciona LER_SENSORES
-    D->>A: POST /api/agents/esp32-03/command
-    A->>C: Submit(agente, comando, args)
-    A-->>D: HTTP 202 + op_id
-    C->>C: Cria sessão e challenge
-    C->>W: Wake(session, agente, challenge)
-    W->>E: UDP porta 18081
-    E->>E: Valida HMAC e agent_id
-    E->>H: Abre WebSocket e envia Hello
-    H->>H: Valida challenge_response
-    H->>E: Welcome
-    H-->>C: Sessão autenticada
-    C->>E: Command(command_id = op_id)
-    E->>E: Lê sensores
-    E->>H: Result(stdout, stderr)
-    H-->>C: Result recebido
-    C->>S: operation_completed
-    S-->>D: Evento SSE
-    E->>H: Bye(completed)
-    E->>E: Fecha WS e retorna a STANDBY
-    D->>D: Parser, memória e SVG
+ autonumber
+ participant D as Dashboard
+ participant C as Controller
+ participant W as Wake UDP
+ participant E as ESP32
+ participant H as WS Handler
+ D->>C: POST TEMPERATURA
+ C-->>D: HTTP 202 + op_id
+ C-->>D: SSE command_created
+ C->>W: session_id + challenge + MAC
+ W->>E: Wake unicast
+ E->>E: valida WakeMAC
+ E->>H: WebSocket upgrade + Hello
+ H->>H: valida sessão e HelloResponse
+ H-->>E: Welcome
+ H-->>C: NotifyAuth
+ C->>E: Command(command_id, TEMPERATURA)
+ C-->>D: SSE command_sent
+ E->>E: consulta cache
+ E-->>H: Result(23.45 C)
+ H-->>C: NotifyResult
+ C-->>D: SSE result_received
+ D->>D: parser, memória e gráfico
+ E-->>H: Bye
+ H->>H: cleanup da sessão
 ```
 
-## 3. Aceite da operação
+**Figura 5** — Sequência nominal de uma leitura. A mesma ordem se aplica
+a outras capabilities; mudam o comando, os argumentos e o processamento
+executado pelo firmware.
 
-O POST retorna imediatamente com 202 e um `op_id`. O dashboard acrescenta a operação como pendente. O Controller trabalha em goroutine, permitindo que a API atenda outras requisições.
+## 3.4 Três identificadores que não devem ser confundidos
 
-## 4. Convocação
+Durante o exemplo, três identificadores aparecem com finalidades
+distintas. O agente continua sendo o mesmo durante todo o experimento; a
+operação representa uma intenção; a sessão representa uma tentativa de
+conexão. Se houver retry, a operação permanece, mas a sessão e o
+challenge são renovados.
 
-O Controller usa o `last_ip` do registry. Se não houver IP, a operação falha antes do Wake. O ESP32 em `STANDBY` recebe o pacote, valida o HMAC e inicia a conexão WebSocket.
+```mermaid
+flowchart LR
+ A[agent_id: esp32-03] -->|seleciona| D[Dispositivo e secret]
+ O[op_id: UUID-A] -->|acompanha| P[Intenção lógica]
+ S1[session_id: UUID-S1] -->|tentativa 1| T1[Challenge 1]
+ S2[session_id: UUID-S2] -->|retry da mesma operação| T2[Challenge 2]
+ P --> T1
+ P --> T2
+```
 
-## 5. Autenticação e execução
+**Figura 6** — Identidade do dispositivo, da operação e das tentativas.
+Um retry cria uma nova sessão sem alterar o op_id da intenção original.
 
-O `Hello` associa o dispositivo à sessão. O Gateway verifica o HMAC com comparação timing-safe. O `Welcome` libera a etapa de comando.
+**Tabela 5 — Identificadores e seus ciclos de vida**
 
-Em `LER_SENSORES`, o firmware realiza aquisição nova e devolve as cinco grandezas em uma linha de `stdout`.
+| Campo                  | Identifica                                 | Quando muda                                          |
+|------------------------|--------------------------------------------|------------------------------------------------------|
+| `agent_id`             | Dispositivo cadastrado e sua configuração. | Permanece fixo para o agente.                        |
+| `op_id` / `command_id` | Intenção lógica solicitada pelo cliente.   | É criado na submissão e permanece igual nos retries. |
+| `session_id`           | Tentativa episódica de conexão.            | É renovado em cada tentativa.                        |
 
-## 6. Encerramento e apresentação
+> **Resumo do percurso:** O clique cria uma operação; a operação cria
+> uma ou mais sessões; a sessão transporta um Command e um Result; o SSE
+> informa o andamento; o dashboard transforma o resultado em informação
+> visual.
+---
 
-O Controller publica o resultado por SSE. O dashboard reconhece o texto, atualiza cartões, adiciona pontos e desenha os gráficos. O `Bye` fecha a sessão de rede.
-
-## 7. Exceções
-
-| Falha | Efeito |
-|---|---|
-| Sem `last_ip` | Operação falha antes do Wake |
-| Wake não recebido | Nova tentativa dentro da política de retry |
-| Hello não chega | Timeout de autenticação |
-| Result não chega | Timeout de execução ou regra não idempotente |
-| SSE desconecta | Navegador tenta reconectar; operação não é cancelada |
-
-## 8. Particularidade do motor
-
-`MOVER` devolve Result ao iniciar a geração de pulsos. O movimento pode continuar depois de Bye e não possui confirmação física de conclusão.
+[Voltar ao índice da documentação](README.md)

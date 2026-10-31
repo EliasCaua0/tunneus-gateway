@@ -1,73 +1,105 @@
-# Visão geral do sistema
+[← Índice da documentação](README.md)
 
-O Tunneus Gateway permite que um operador envie comandos a dispositivos ESP32 por meio de um dashboard web. O sistema usa rede local, não exige conexão permanente dos agentes por WebSocket e apresenta resultados de execução e telemetria em tempo real no navegador.
+# 1. Visão geral: o que é o Tunneus
 
-## 1. O problema resolvido
+> **Neste capítulo:** A finalidade do sistema, o problema resolvido pela
+> arquitetura e o papel de cada agente são apresentados antes dos
+> detalhes de comunicação.
 
-Em uma bancada com microcontroladores, sensores e atuadores, cada dispositivo pode ter pinos, capabilities e limitações próprias. O Tunneus organiza essa operação em quatro partes:
+## 1.1 O sistema em uma frase
 
-1. **Dashboard:** interface usada pelo operador.
-2. **Gateway:** processo central que valida, coordena e registra operações.
-3. **Protocolo Tunneus:** mensagens e regras de comunicação.
-4. **Agentes ESP32:** firmwares que executam comandos no hardware.
+O Tunneus é uma camada de mediação entre uma interface de operação e
+dispositivos físicos. Ele recebe uma intenção — por exemplo, ler
+sensores ou movimentar um motor —, convoca o agente correspondente,
+estabelece uma sessão temporária e devolve o resultado à interface.
+
+O sistema pertence ao ecossistema ArcanLab e adota uma arquitetura
+**semi-offline**: a operação principal funciona em rede local, sem
+depender de Internet, e o acesso remoto já pode ser realizado por uma
+rede privada Tailscale. Esse acesso remoto está em aprimoramento e não
+substitui a autonomia local. Bancadas didáticas e experimentos de
+laboratório tornam a comunicação observável, mantendo os componentes sob
+controle do experimento.
+
+Os protótipos são aplicações do Tunneus, não o projeto em si. Eles têm
+papel de experimentação e teste do núcleo comum. O caderno de campo
+registra a evolução até a primeira versão estável apresentada em feira;
+seus dados históricos são oriundos da bancada real e não devem ser
+confundidos com os valores sintéticos do mock. A [trajetória do projeto](00-trajetoria-e-bancadas.md)
+apresenta essa distinção em detalhes.
 
 ```mermaid
-flowchart TB
-    U["Operador"] --> D["Dashboard v5.1"]
-    D -->|"REST e SSE"| G["Gateway Go"]
-    G -->|"Protocolo Tunneus"| A1["Agente 01<br/>LED"]
-    G -->|"Protocolo Tunneus"| A3["Agente 03<br/>Sensores + motor"]
-    A1 --> H1["GPIO 2"]
-    A3 --> H3["BMP180 · ACS712 · HC-SR04 · Driver"]
+flowchart LR
+ U[Operador] --> D[Dashboard]
+ D --> G[Tunneus Gateway]
+ G --> A1[Agente 01: LED]
+ G --> A2[Agente 02: polias]
+ G --> A3[Agente 03: sensores e motor]
+ A1 --> L[LED GPIO2]
+ A3 --> S[BMP180 ACS712 HC-SR04]
+ A3 --> M[Driver e motor de passo]
 ```
 
-## 2. Premissa semi-offline
+**Figura 1** — Visão geral da solução. O operador não acessa diretamente
+os dispositivos: todas as intenções passam pelo Gateway, que mantém um
+núcleo comum para experimentos diferentes.
 
-A operação principal acontece na rede local. Não há necessidade de nuvem, broker MQTT ou servidor externo para o fluxo Wake → WebSocket → Command → Result.
+## 1.2 O problema resolvido
 
-Isso não significa ausência total de infraestrutura: computador, Gateway e ESP32 precisam de energia, configuração e conectividade IP. O acesso remoto por Tailscale funciona como uma extensão privada em otimização, não como requisito da operação local.
+Cada experimento possui hardware e regras próprias, mas todos precisam
+de identidade, endereço, autorização de comando, comunicação e
+apresentação do resultado. O Tunneus reúne essas necessidades em um
+núcleo comum. O Gateway conhece o nome das capabilities e o formato
+estrutural dos argumentos; o firmware conhece o significado físico de
+cada comando.
 
-## 3. Subagente Passivo + Pico de Conexão
+Essa divisão evita duas formas de acoplamento. O Gateway não precisa
+saber calcular distância, converter corrente ou gerar pulsos; o
+dashboard não precisa abrir sockets para o ESP32. Novos experimentos
+podem compartilhar o mesmo ciclo de operação sem transformar o núcleo em
+um conjunto de regras específicas de sensores e atuadores.
 
-O agente permanece em `STANDBY`, com o WebSocket desligado. O Gateway envia um Wake UDP autenticado. O ESP32 valida a convocação, conecta-se ao Gateway, autentica a sessão, executa uma operação e encerra a conexão.
+## 1.3 Agentes e capacidades
 
-Esse modelo evita manter sockets ociosos e concentra a comunicação WebSocket em curtos períodos de atividade. UDP fica disponível para a convocação; isso não elimina a necessidade de Wi-Fi.
+**Tabela 1 — Agentes representados no projeto**
 
-## 4. Operações assíncronas
+| Agente     | Finalidade                                      | Capabilities                                           | Software no repositório                                   |
+|------------|-------------------------------------------------|--------------------------------------------------------|-----------------------------------------------------------|
+| `esp32-01` | Demonstração compacta com LED.                  | `LED_ON`, `LED_OFF`.                                   | Firmware V4.3-MARATHON.                                   |
+| `esp32-02` | Referência para polias industriais com Ponte H. | `LIGAR`, `ELEVAÇÃO A`, `ELEVAÇÃO B`, `DESLIGAR`.       | Cadastro no Registry; firmware não incluído nesta versão. |
+| `esp32-03` | Bancada com sensores e motor de passo.          | Leituras, `START`, `PARE` e `MOVER` quando habilitado. | Firmware V4.4.                                            |
 
-O endpoint de comandos devolve HTTP 202 assim que a operação é aceita. Isso não significa que o hardware já executou o comando. O desfecho chega posteriormente por SSE.
+> **Capability:** É o nome público de uma ação que o agente pode
+> executar. O Registry declara o que está autorizado; o Controller
+> verifica essa autorização; o dashboard usa a mesma lista para
+> disponibilizar controles; o firmware implementa o comportamento
+> físico.
 
-| Identificador | Significado |
-|---|---|
-| `agent_id` | Dispositivo cadastrado |
-| `op_id` | Intenção lógica de comando |
-| `session_id` | Tentativa específica de conexão |
-| `command_id` | Ligação entre Command e Result; usa o `op_id` |
+## 1.4 O que a versão atual faz
 
-## 5. Telemetria sob demanda
+### Capacidades implementadas
 
-O sistema não faz streaming contínuo dos sensores. Uma leitura acontece quando um comando é enviado. O firmware devolve texto em `Result.stdout`, o Gateway publica o resultado por SSE e o dashboard transforma as grandezas reconhecidas em amostras locais.
+-   Gateway multiagente em Go.
+-   Operação assíncrona com HTTP 202.
+-   Convocação UDP e WebSocket temporário.
+-   Autenticação por HMAC-SHA256.
+-   Leituras sob demanda e controle de motor.
+-   Eventos SSE e gráficos no navegador.
 
-## 6. O que cada versão representa
+### Delimitação do experimento
 
-- **Protocolo v4.1:** especificação das mensagens e regras de comunicação.
-- **Firmware V4.3-MARATHON:** Agente 01.
-- **Firmware V4.4:** Agente 03.
-- **Dashboard v5.1:** interface atual.
-- **Go 1.26:** versão declarada no módulo do Gateway.
+-   Operação local autônoma e acesso remoto via Tailscale, em otimização.
+-   Protótipos utilizados como instrumentos de experimentação do sistema.
+-   Sem heartbeat permanente.
+-   Sem telemetria contínua para o Gateway.
+-   Histórico visual somente no navegador.
+-   Descoberta automática e MQTT no roadmap.
+-   Validação metrológica como etapa de bancada.
 
-Esses números identificam componentes diferentes e não devem ser combinados em uma única versão do sistema.
+> **Antes de avançar:** O ponto mais importante é a separação de
+> responsabilidades: a interface expressa a intenção, o Gateway organiza
+> a operação e o agente executa a capability. O próximo capítulo mostra
+> como essas responsabilidades formam a arquitetura.
+---
 
-## 7. Limites essenciais
-
-- Sem TLS nativo.
-- Sem descoberta automática de agentes.
-- Sem persistência das séries do dashboard após recarregar.
-- Sem realimentação de posição do motor.
-- Sem garantia de conclusão física apenas pelo recebimento de `MOVER`.
-- Sem ensaio formal de operação com a WAN desconectada, embora a arquitetura local não dependa de Internet.
-- Sem distribuição open source ou licenciamento futuro já decidido.
-
-## 8. Próxima leitura
-
-A [arquitetura](02-arquitetura.md) apresenta os módulos e suas dependências. A [operação ponta a ponta](03-operacao-ponta-a-ponta.md) acompanha um comando completo.
+[Voltar ao índice da documentação](README.md)

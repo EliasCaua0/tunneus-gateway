@@ -1,96 +1,106 @@
-# Arquitetura e módulos
+[← Índice da documentação](README.md)
 
-O Gateway segue uma arquitetura modular em processo único. HTTP, SSE, WebSocket, sessões, registry e controller são componentes do mesmo binário Go.
+# 2. Arquitetura: quem conversa com quem
 
-## 1. Diagrama estrutural
+> **Neste capítulo:** A arquitetura é dividida em planos, canais e
+> responsabilidades. O objetivo é responder onde cada tecnologia atua e
+> por que não existe comunicação direta entre navegador e ESP32.
+
+## 2.1 Três planos de responsabilidade
+
+A solução pode ser compreendida em três planos. O plano de **interação**
+reúne o operador e o dashboard; o de **orquestração** reúne API,
+Controller, Registry, sessões e eventos; o de **execução física** reúne
+firmware, sensores e atuadores. As setas entre os planos representam
+contratos, não apenas conexões de rede.
 
 ```mermaid
 flowchart TB
-    subgraph Browser["Navegador"]
-        UI["Dashboard v5.1"]
-    end
-
-    subgraph Gateway["Processo tunneus-gateway"]
-        API["internal/api<br/>REST + SSE"]
-        WS["internal/websocket<br/>Handler WebSocket"]
-        CT["internal/controller<br/>Operações e retries"]
-        RG["internal/registry<br/>Agentes"]
-        SS["internal/session<br/>Sessões e challenges"]
-        WK["internal/wake<br/>UDP"]
-        EV["Event Bus<br/>canal com buffer 256"]
-        ST["configs/registry.json<br/>runtime, ignorado pelo Git"]
-    end
-
-    ESP["Agentes ESP32"]
-
-    UI -->|"HTTP"| API
-    API -->|"SSE"| UI
-    API --> CT
-    API --> RG
-    CT --> RG
-    CT --> SS
-    CT --> WK
-    CT --> EV
-    WS --> SS
-    WS --> RG
-    WS --> CT
-    WK -->|"Wake UDP 18081"| ESP
-    ESP -->|"WebSocket /ws"| WS
-    RG --> ST
+ subgraph I[Plano de interação]
+  U[Operador] --- D[Dashboard HTML CSS JavaScript]
+ end
+ subgraph O[Plano de orquestração]
+  API[API REST e SSE] --- C[Controller]
+  C --- R[Registry]
+  C --- S[Sessões efêmeras]
+ end
+ subgraph F[Plano de execução física]
+  E[Firmware ESP32] --- H[Sensores e atuadores]
+ end
+ D -->|HTTP JSON| API
+ API -->|eventos SSE| D
+ C -->|Wake UDP e Command| E
+ E -->|Hello e Result| C
 ```
 
-## 2. Inicialização
+**Figura 2** — Arquitetura em camadas. O plano central transforma
+intenções em operações e mantém a interface separada das regras físicas
+implementadas no firmware.
 
-`cmd/gateway/main.go` cria o registry, o Session Store, o Wake Sender e o Controller. Em seguida, instancia o handler WebSocket e a API. O servidor escuta HTTP em `:18080`.
+**Tabela 2 — Responsabilidade de cada plano**
 
-A variável `TUNNEUS_SECRET` é lida na inicialização e repassada ao Wake Sender. O registry é carregado de `configs/registry.json`, relativo ao diretório de trabalho do processo.
+| Plano           | Responsabilidade                                                   | O que não faz                                                   |
+|-----------------|--------------------------------------------------------------------|-----------------------------------------------------------------|
+| Interação       | Apresentar dados, coletar comandos e acompanhar eventos.           | Não abre WebSocket para o agente e não calcula as medições.     |
+| Orquestração    | Validar, identificar, convocar, sincronizar e publicar resultados. | Não interpreta a física de temperatura, distância ou movimento. |
+| Execução física | Autenticar-se, executar capabilities e controlar o hardware.       | Não expõe rotas REST nem administra o dashboard.                |
 
-## 3. API HTTP
+## 2.2 Os quatro canais de comunicação
 
-`internal/api/agents.go` oferece:
+Embora o sistema pareça uma única conversa, quatro mecanismos participam
+de momentos diferentes. HTTP recebe a intenção; SSE informa o andamento
+ao navegador; UDP convoca o agente; WebSocket transporta a sessão
+autenticada. O Registry em JSON mantém a configuração dos agentes, e o
+Serial oferece diagnóstico local.
 
-| Método e rota | Função |
-|---|---|
-| `POST /api/agents` | Cadastra agente e decodifica a secret Base64 |
-| `GET /api/agents` | Lista agentes sem expor secrets |
-| `GET /api/agents/{id}` | Consulta um agente |
-| `DELETE /api/agents/{id}` | Remove um agente |
-| `POST /api/agents/{id}/command` | Cria operação assíncrona |
-| `GET /api/events` | Abre stream SSE |
-| `GET /` | Serve o dashboard e arquivos estáticos |
+```mermaid
+flowchart LR
+ D[Dashboard] -->|POST TCP 18080| G[Gateway]
+ G -->|SSE TCP 18080| D
+ D -->|GET agents a cada 3 s| G
+ G -->|Wake UDP 18081| E[ESP32]
+ E -->|WebSocket TCP 18080 em /ws| G
+ G <--> R[(registry.json)]
+ E -->|Serial 115200| M[Monitor local]
+```
 
-O dashboard é incorporado ao binário por `embed.FS`. O handler usa `http.FileServer` com o conteúdo de `web/dashboard`.
+**Figura 3** — Canais e portas. O UDP é usado apenas para a convocação;
+as mensagens Command e Result percorrem o WebSocket aberto pelo próprio
+agente.
 
-## 4. Controller
+O acesso remoto via Tailscale acrescenta uma camada de conectividade
+privada entre o operador autorizado e o Gateway, sem alterar esses quatro
+canais nem criar comunicação direta entre navegador e ESP32. O
+funcionamento remoto já existe e está em otimização; a operação local
+continua independente de Internet.
 
-`internal/controller/controller.go` mantém o mapa de operações, cria sessões, envia Wake, aguarda autenticação, envia Command e aguarda Result.
+**Tabela 3 — Função de cada canal**
 
-O mapa `nonIdempotentCmds` identifica `MOVER`. A informação evita reenvio automático depois que o comando foi entregue ao agente.
+| Canal                | Direção             | Conteúdo                                                | Duração                                   |
+|----------------------|---------------------|---------------------------------------------------------|-------------------------------------------|
+| HTTP REST, TCP 18080 | Cliente → Gateway   | Listagens, comandos e consulta de operação.             | Resposta HTTP imediata; POST retorna 202. |
+| SSE, TCP 18080       | Gateway → navegador | Criação, Wake, autenticação, envio, resultado e falhas. | Stream por cliente, com reconexão.        |
+| UDP 18081            | Gateway → ESP32     | Wake com sessão, challenge e MAC.                       | Um datagrama por tentativa.               |
+| WebSocket, TCP 18080 | ESP32 ↔ Gateway     | Hello, Welcome, Command, Result e Bye.                  | Somente durante o Pico de Conexão.        |
 
-## 5. Registry
+## 2.3 Multiagente no núcleo, especialização na bancada
 
-`internal/registry/registry.go` guarda os agentes em memória e grava JSON atomically: primeiro escreve um arquivo temporário e depois executa rename.
+O núcleo não foi limitado a um único dispositivo. Cada operação carrega
+um `agent_id`, e o Registry pode conter vários agentes com capabilities
+diferentes. O dashboard v5.1, por sua vez, é especializado no Agente 03
+e apresenta cinco grandezas e controles de movimento. Essa
+especialização da interface não reduz a capacidade multiagente do
+Gateway.
 
-Cada agente possui ID, capabilities, secret e `last_ip`. O IP é atualizado quando o WebSocket é autenticado.
+O painel utiliza `esp32-03` por padrão e aceita o parâmetro
+`?agent=<id>`. Ele filtra os eventos pelo agente selecionado, mas não se
+transforma automaticamente em uma interface genérica para qualquer
+hardware. Essa escolha mantém a apresentação da bancada clara e preserva
+a independência entre núcleo e experimento.
 
-## 6. Session Store
+> **Modelo mental da arquitetura:** HTTP inicia, SSE acompanha, UDP
+> convoca e WebSocket executa a conversa autenticada. Com esses quatro
+> papéis separados, já é possível acompanhar uma operação completa.
+---
 
-`internal/session/session.go` cria sessões com `session_id`, `agent_id`, `challenge`, timestamp e estado de autenticação. O TTL é de 60 segundos e a limpeza ocorre a cada 30 segundos.
-
-## 7. Wake
-
-`internal/wake/wake.go` monta a mensagem UDP, calcula o HMAC e envia ao IP e porta informados. A porta padrão é 18081.
-
-## 8. WebSocket
-
-`internal/websocket/handler.go` faz upgrade da conexão e espera o `Hello`. Após autenticar, registra canais para liberar o Controller e receber o Result. O handler possui um timer geral de 30 segundos.
-
-## 9. Event Bus
-
-O Controller publica eventos em um canal com buffer de 256 posições. Se o canal estiver cheio, o evento é descartado em vez de bloquear a operação. Cada consumidor SSE recebe o stream da API.
-
-## 10. Firmware e dashboard
-
-Os firmwares ficam fora do binário Go e são gravados separadamente. O dashboard é uma SPA única, sem framework, incorporada ao Gateway.
-
-Essa organização facilita a demonstração local, mas concentra disponibilidade e estado operacional em um único processo.
+[Voltar ao índice da documentação](README.md)
