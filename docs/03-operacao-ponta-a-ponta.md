@@ -12,7 +12,7 @@ Ao clicar em “Ler” no cartão de temperatura, o operador não recebe
 imediatamente o valor do sensor. Primeiro, o Gateway aceita a intenção e
 cria uma operação. Depois, convoca o agente, autentica uma sessão,
 entrega o comando e aguarda o Result. Somente quando esse resultado
-retorna por SSE o dashboard cria a amostra.
+retorna por SSE o dashboard cria a amostra. 
 
 ```mermaid
 flowchart LR
