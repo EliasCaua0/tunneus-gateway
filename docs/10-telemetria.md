@@ -1,48 +1,106 @@
-# Telemetria e gráficos
+[← Índice da documentação](README.md)
 
-A telemetria do Tunneus é sob demanda. O navegador monta séries temporais a partir dos resultados das operações.
+# 10. Telemetria: do sensor ao gráfico
 
-## 1. Pipeline
+> **Neste capítulo:** O percurso de uma grandeza é separado em
+> aquisição, transporte, interpretação e apresentação. Essa separação
+> explica por que o sistema possui telemetria sob demanda, embora o
+> firmware atualize seu cache periodicamente.
+
+## 10.1 Sob demanda, não em streaming contínuo
+
+O ESP32 atualiza o cache a cada 2 s, mas não envia esses valores
+espontaneamente ao Gateway. Uma amostra chega ao navegador apenas quando
+uma capability de leitura é solicitada e o Result correspondente
+retorna. Não existe, nesta versão, um produtor contínuo de telemetria
+nem um banco de dados de séries temporais.
 
 ```mermaid
 flowchart LR
-    F["Firmware<br/>Result.stdout"] --> G["Gateway"]
-    G --> S["SSE"]
-    S --> P["Parser JavaScript"]
-    P --> M["Memória do navegador"]
-    M --> V["Gráficos SVG"]
+ U[Clique em Ler] --> P[POST da capability]
+ P --> O[Wake autenticacao Command]
+ O --> F[Firmware le ou consulta cache]
+ F --> R[Result stdout textual]
+ R --> S[SSE result_received]
+ S --> V[Parser estrito]
+ V --> M[Memoria do navegador]
+ M --> G[Grafico SVG e ultima leitura]
 ```
 
-Não há banco de dados nesse caminho. O timestamp atribuído à amostra é o horário de recebimento no navegador.
+**Figura 18** — Caminho completo da medição. O sensor e o relógio de
+aquisição ficam no ESP32; a interpretação e o histórico visual ficam no
+navegador.
 
-## 2. Grandezas do Agente 03
+Além das grandezas físicas, os eventos SSE formam uma telemetria
+operacional: descrevem criação, Wake, autenticação, envio, resultado e
+erro. Assim, o painel apresenta tanto o valor medido quanto o caminho
+percorrido pela operação.
 
-| Grandeza | Origem | Comando agregado |
-|---|---|---|
-| Pressão | BMP180 | `LER_SENSORES` |
-| Corrente | ACS712 | `LER_SENSORES` |
-| Distância | HC-SR04 | `LER_SENSORES` |
-| Passos | Contador do firmware | `LER_SENSORES` |
-| Velocidade | Configuração/estado do motor | `LER_SENSORES` |
+## 10.2 O parser preserva o contrato
 
-Leituras individuais também podem alimentar a grandeza correspondente.
+O Result é textual e precisa ser interpretado sem ambiguidade. Para
+leituras individuais, o dashboard aceita um número decimal seguido da
+unidade esperada: `C`, `Pa`, `m`, `A` ou `cm`. Para `LER_SENSORES`,
+separa os campos por `|` e depois cada par por `=`.
 
-## 3. Parser e deduplicação
+Pressão chega em Pa e é convertida para hPa somente na apresentação.
+Distância `NA`, valor negativo ou unidade inesperada não substitui a
+última leitura válida. Uma ocorrência com `stderr` pode ser preservada
+como marca inválida, mantendo a diferença entre “sem nova amostra” e
+“nova amostra válida”.
 
-O parser reconhece os formatos textuais produzidos pelo firmware. A deduplicação usa `op_id + grandeza`, evitando inserir a mesma leitura duas vezes quando eventos são reprocessados.
+**Tabela 17 — Transformações aplicadas no navegador**
 
-## 4. Retenção local
+| Entrada                       | Verificação                       | Saída visual                                  |
+|-------------------------------|-----------------------------------|-----------------------------------------------|
+| `23.45 C`                     | Número e unidade C.               | 23,45 °C na apresentação.                     |
+| `101325 Pa`                   | Número e unidade Pa.              | 1013,25 hPa após conversão.                   |
+| `35.2 cm`                     | Número não negativo e unidade cm. | Amostra de distância.                         |
+| `DISTANCIA=NA`                | Ausência de eco.                  | Ocorrência inválida; não vira ponto numérico. |
+| Unidade diferente da esperada | Incompatibilidade de contrato.    | Resultado não é aceito como grandeza válida.  |
 
-Cada grandeza mantém até 1.000 amostras e descarta dados com mais de 24 horas. Recarregar a página limpa as séries.
+## 10.3 O ciclo de vida de uma amostra
 
-## 5. SVG
+O dashboard guarda as amostras na memória da página. Cada ponto recebe o
+instante de recebimento no navegador, pois o firmware não envia
+timestamp nem sincronização NTP. A chave `op_id + grandeza` impede que
+um evento repetido duplique o ponto.
 
-Os gráficos são gerados sem biblioteca externa. Eixos, escalas e pontos são recalculados no navegador.
+```mermaid
+flowchart LR
+ E[Evento result_received] --> F{Agente e operacao correspondem?}
+ F -->|nao| X[Ignorar para a grandeza]
+ F -->|sim| D{op_id + grandeza ja existe?}
+ D -->|sim| X
+ D -->|nao| P{Parser e unidade validos?}
+ P -->|nao| I[Registrar ocorrencia invalida]
+ P -->|sim| A[Adicionar amostra com timestamp local]
+ A --> R[Aplicar limite de 1000 pontos e 24 h]
+ R --> G[Redesenhar SVG por requestAnimationFrame]
+```
 
-## 6. Interpretação
+**Figura 19** — Ciclo da amostra no navegador. Filtragem, deduplicação e
+validação ocorrem antes da atualização do gráfico.
 
-- Uma linha contínua no gráfico não significa aquisição contínua.
-- O intervalo entre amostras depende dos comandos enviados.
-- Dados do mock são sintéticos.
-- Dados históricos do caderno vêm da bancada real.
-- O dashboard não corrige erros de calibração do sensor.
+**Tabela 18 — Retenção e apresentação do histórico**
+
+| Aspecto              | Comportamento                                                                     |
+|----------------------|-----------------------------------------------------------------------------------|
+| Retenção             | Até 1000 amostras por grandeza e até 24 h, o que ocorrer primeiro.                |
+| Janelas dos gráficos | 15 min, 1 h, 6 h e 24 h.                                                          |
+| Desatualização       | Última amostra com mais de 5 min é sinalizada.                                    |
+| Persistência         | Não há persistência; recarregar a página apaga amostras, operações e logs locais. |
+| Reconexão            | EventSource reconecta o SSE; polling do Registry continua em paralelo.            |
+
+> **Duas frequências diferentes:** O cache físico é atualizado pelo
+> firmware; o histórico visual avança quando uma leitura é solicitada e
+> confirmada. Confundir esses dois ciclos daria a impressão de streaming
+> que a arquitetura atual não possui.
+
+## Código e referências relacionadas
+
+- [Dashboard e parser](../web/dashboard/index.html)
+
+---
+
+[Voltar ao índice da documentação](README.md)

@@ -1,48 +1,108 @@
-# Timeouts, retries e concorrência
+[← Índice da documentação](README.md)
 
-A comunicação combina UDP, WebSocket e espera assíncrona. Timeouts e regras de reenvio evitam espera indefinida.
+# 8. Confiabilidade, timeouts e retries
 
-## 1. Valores implementados
+> **Pergunta central:** O que acontece quando a conversa não avança? O
+> sistema utiliza tempos máximos, novas tentativas e uma regra
+> específica para comandos que podem alterar o estado físico.
 
-| Etapa | Valor |
-|---|---|
-| Tentativas máximas | 5 |
-| Backoff nominal | 0, 1, 2, 4 e 8 segundos |
-| Espera por autenticação | 10 segundos |
-| Espera por Result | 15 segundos |
-| TTL da sessão | 60 segundos |
-| Limpeza de sessões | A cada 30 segundos |
-| Timer geral WebSocket | 30 segundos |
-| Watchdog visual do dashboard | 150 segundos |
+## 8.1 Cada espera possui um limite
 
-O primeiro envio não aguarda backoff. Os valores nominais de espera entre tentativas formam a sequência apresentada; a implementação deve ser consultada para detalhes de scheduling.
+Uma operação distribuída pode parar em diferentes pontos. Por isso, o
+projeto não utiliza uma espera única e indefinida. O Controller, o
+handler e o firmware possuem limites próprios, adequados à etapa que
+controlam.
 
-## 2. Backoff exponencial
+**Tabela 11 — Tempos empregados na coordenação**
+
+| Local             | Espera ou varredura           | Valor   | Efeito                                     |
+|-------------------|-------------------------------|---------|--------------------------------------------|
+| Controller        | Autenticação da sessão        | 10 s    | Encerra a tentativa e avalia retry.        |
+| Controller        | Result após o Command         | 15 s    | Aplica a regra de resultado ausente.       |
+| WebSocket Handler | Timer geral após autenticação | 30 s    | Evita conexão autenticada sem progresso.   |
+| Ephemeral Store   | TTL da sessão                 | 60 s    | Marca sessões antigas para remoção.        |
+| Ephemeral Store   | Intervalo de limpeza          | 30 s    | Remove sessões expiradas.                  |
+| Agente 03         | Estado ACK                    | Até 5 s | Encerra com Bye por timeout se necessário. |
+
+## 8.2 A política de novas tentativas
+
+O Controller realiza até cinco tentativas. O backoff nominal entre elas
+é de 0, 1, 2, 4 e 8 segundos. Cada tentativa recebe novo `session_id` e
+novo challenge, preservando o `op_id`. A renovação impede que a próxima
+tentativa dependa de credenciais efêmeras da anterior.
 
 ```mermaid
-flowchart LR
-    T1["Tentativa 1<br/>imediata"] --> T2["Tentativa 2<br/>após 1 s"]
-    T2 --> T3["Tentativa 3<br/>após 2 s"]
-    T3 --> T4["Tentativa 4<br/>após 4 s"]
-    T4 --> T5["Tentativa 5<br/>após 8 s"]
+flowchart TB
+ A[Nova tentativa: session_id e challenge] --> W[Enviar Wake]
+ W --> B{Autenticou em 10 s?}
+ B -->|não| R{Há tentativa e comando reenviável?}
+ B -->|sim| C[Enviar Command]
+ C --> D{Result em 15 s?}
+ D -->|sim| OK[Publicar resultado e concluir]
+ D -->|não| N{Comando é MOVER e já foi enviado?}
+ N -->|sim| F[Encerrar sem reenviar MOVER]
+ N -->|não| R
+ R -->|sim| T[Aguardar backoff e tentar novamente]
+ T --> A
+ R -->|não| E[Publicar erro e liberar sessão]
 ```
 
-Cada tentativa renova sessão e challenge, preservando o `op_id`.
+**Figura 14** — Decisão de retry. O identificador da operação permanece,
+mas a tentativa muda. MOVER recebe tratamento conservador depois que o
+Command foi enviado.
 
-## 3. Canais com buffer um
+## 8.3 Por que MOVER não é reenviado após a perda do Result
 
-`authCh` e `resultCh` têm capacidade um. Isso evita acúmulo ilimitado de notificações para uma operação e torna explícita a entrega entre handler e Controller.
+Ler um sensor pode ser repetido sem alterar a grandeza medida. Mover um
+motor, por outro lado, muda a posição física. Se o Command foi entregue
+e apenas o Result se perdeu, repetir MOVER poderia produzir um segundo
+deslocamento, embora a intenção original fosse única.
 
-## 4. Comandos não idempotentes
+Por isso, `MOVER` pertence ao conjunto de comandos não idempotentes do
+Controller. Depois de `command_sent`, a ausência de Result não provoca
+reenvio desse comando. A regra privilegia a previsibilidade do atuador
+em vez da simples insistência na comunicação.
 
-`MOVER` pode produzir movimento físico. Depois que o Command foi enviado, a ausência de Result não significa que o agente não executou. Reenviar poderia duplicar o movimento.
+> **Idempotência, em linguagem direta:** Uma operação idempotente pode
+> ser repetida sem acrescentar um novo efeito a cada repetição. Um
+> movimento incremental não possui essa propriedade: duas execuções de
+> 200 passos podem deslocar 400 passos.
 
-Por isso, após `command_sent`, a perda do Result não provoca nova tentativa automática de `MOVER`.
+## 8.4 Estados da operação e eventos
 
-## 5. Watchdog visual
+A interface acompanha a transição entre criação, convocação,
+autenticação, envio, resultado e erro. Esses estados descrevem a
+operação lógica, enquanto a sessão possui seu próprio ciclo. Separar os
+dois permite representar retries sem perder a identidade da intenção.
 
-O dashboard destaca operações antigas após 150 segundos. Esse watchdog não cancela necessariamente a goroutine nem o hardware; é uma sinalização de interface.
+**Tabela 12 — Leitura dos eventos mais frequentes**
 
-## 6. Consequência prática
+| Evento                  | Informação carregada                        | Uso no dashboard                                      |
+|-------------------------|---------------------------------------------|-------------------------------------------------------|
+| `command_created`       | Operação aceita e identificadores iniciais. | Abre acompanhamento e registra a intenção.            |
+| `wake_sent` / `auth_ok` | Progresso da tentativa.                     | Atualiza histórico e disponibilidade.                 |
+| `command_sent`          | Command escrito no WebSocket.               | Informa que a execução foi solicitada.                |
+| `result_received`       | Resultado, operação, agente e comando.      | Entrega dados ao parser e finaliza a espera.          |
+| Evento de erro          | Motivo e contexto da operação.              | Encerra a espera sem criar amostra numérica inválida. |
 
-Timeout de rede e estado físico são coisas diferentes. Uma interface pode mostrar falha enquanto o motor continua girando. `PARE` deve ser usado conforme a disponibilidade do agente e as regras da bancada.
+## 8.5 Watchdog e manutenção do agente
+
+A confiabilidade também aparece no firmware. O Agente 01 monitora Wi-Fi,
+renova a escuta UDP, acompanha heap e utiliza watchdog de 15 s, além de
+reboot preventivo. O objetivo é recuperar o serviço básico de escuta e
+evitar que condições transitórias deixem o dispositivo preso fora do
+ciclo STANDBY–Wake.
+
+Esses mecanismos atuam em camadas diferentes: timeouts delimitam
+esperas, retries repetem intenções permitidas, cleanup libera sessões e
+watchdog recupera o firmware. Em conjunto, eles sustentam o caráter
+episódico da conexão.
+
+## Código e referências relacionadas
+
+- [Retries e estados](../internal/controller/controller.go)
+- [TTL e limpeza](../internal/session/session.go)
+
+---
+
+[Voltar ao índice da documentação](README.md)
