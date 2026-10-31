@@ -1,248 +1,343 @@
-# Decisões Arquiteturais — Tunneus Gateway
+# Decisões Arquiteturais
 
-Este documento registra as decisões arquiteturais (ADRs) do projeto Tunneus.
+> Este documento registra as principais decisões de arquitetura tomadas durante o desenvolvimento do Tunneus, bem como as motivações por trás de cada uma delas.
 
----
-
-## ADR-001: Modelo Subagente Passivo + Pico de Conexão
-
-**Data:** 2026-02-16
-**Status:** Aceito
-
-### Contexto
-Precisamos controlar dispositivos ESP32 em rede local com baixo consumo de recursos e sem manter conexões persistentes.
-
-### Decisão
-Adotar o modelo "Subagente Passivo": o agente fica em standby (UDP aberto) e só abre WebSocket quando recebe um Wake válido. Após executar o comando, envia Bye e fecha a conexão.
-
-### Alternativas Consideradas
-1. **WebSocket persistente**: Agentes mantêm conexão aberta
-2. **MQTT**: Broker centraliza comunicação
-3. **CoAP**: Protocolo leve para IoT
-4. **HTTP polling**: Agentes consultam Gateway periodicamente
-
-### Consequências
-- ✅ Baixo consumo de recursos no ESP32
-- ✅ Sem necessidade de broker externo
-- ✅ Funciona offline na rede local
-- ⚠️ Latência adicional para acordar agente
-- ⚠️ Wake UDP pode ser perdido (mitigado com retry)
+O objetivo é preservar o contexto das decisões, facilitando a evolução do projeto e evitando mudanças que contrariem seus princípios fundamentais.
 
 ---
 
-## ADR-002: Autenticação HMAC-SHA256
+# ADR-001 — Arquitetura Baseada em Agentes
 
-**Data:** 2026-02-16
-**Status:** Aceito
+## Decisão
 
-### Contexto
-Precisamos autenticar agentes sem depender de infraestrutura de certificados (PKI).
+O Tunneus utilizará uma arquitetura baseada em agentes.
 
-### Decisão
-Usar HMAC-SHA256 com secret compartilhada por agente. O Gateway envia um challenge no Wake e o agente responde com HMAC no Hello.
+Cada dispositivo gerenciado executará um Agent responsável por estabelecer comunicação com o Gateway.
 
-### Alternativas Consideradas
-1. **mTLS**: Certificados cliente/servidor
-2. **Tokens JWT**: Tokens assinados
-3. **Senha simples**: Autenticação básica
+## Motivação
 
-### Consequências
-- ✅ Simples de implementar
-- ✅ Sem dependência externa
-- ✅ Timing-safe comparison
-- ⚠️ Gerenciamento manual de secrets
-- ⚠️ Sem revogação automática
+Essa abordagem permite:
 
----
+- Escalabilidade.
+- Independência entre dispositivos.
+- Comunicação coordenada pelo Gateway.
+- Menor complexidade de rede.
+- Compatibilidade com diferentes sistemas operacionais.
 
-## ADR-003: Comunicação Híbrida UDP + WebSocket
+## Consequências
 
-**Data:** 2026-02-16
-**Status:** Aceito
-
-### Contexto
-UDP é ideal para wake (fire-and-forget), mas não garante entrega. WebSocket oferece canal confiável bidirecional.
-
-### Decisão
-Usar UDP apenas para Wake e WebSocket para toda comunicação subsequente (Hello, Command, Result, Bye).
-
-### Consequências
-- ✅ Wake é leve e rápido
-- ✅ WebSocket garante entrega ordenada
-- ✅ Separação clara de responsabilidades
-- ⚠️ Dois protocolos para manter
+Todo dispositivo gerenciado deverá possuir um Agent instalado.
 
 ---
 
-## ADR-004: Retry com Backoff Exponencial
+# ADR-002 — O Agent inicia a conexão
 
-**Data:** 2026-02-16
-**Status:** Aceito
+> **Status: substituído na v4.** Na v4 o Gateway convoca o agente por UDP (Wake) e o agente abre o WebSocket somente quando convocado ("Subagente Passivo"). O Gateway ainda não abre conexão TCP para o agente. Ver `PROTOCOLO.md` e `docs/SYSTEM_OVERVIEW.md`. O texto abaixo é mantido como registro histórico.
 
-### Decisão
-Implementar retry com backoff exponencial (1s, 2s, 4s, 8s, 16s) e jitter de ±20%.
+## Decisão
 
-### Consequências
-- ✅ Tolera falhas transitórias de rede
-- ✅ Evita tempestade de retries
-- ⚠️ Latência máxima de ~31s em caso de falha total
+O Gateway nunca abrirá conexões diretamente para um Agent.
 
----
+Sempre será o Agent quem iniciará a conexão.
 
-## ADR-005: Registry em JSON (sem banco de dados)
+## Motivação
 
-**Data:** 2026-02-16
-**Status:** Aceito
+Essa decisão resolve diversos problemas comuns:
 
-### Decisão
-Usar arquivo JSON para persistir o registry de agentes, com escrita atômica (tmp + rename).
+- NAT.
+- Firewalls.
+- Redes domésticas.
+- Ambientes corporativos.
+- Dispositivos móveis.
+- Raspberry Pi em redes locais.
 
-### Alternativas Consideradas
-1. **SQLite**: Banco embarcado
-2. **PostgreSQL**: Banco relacional
-3. **etcd**: Distributed KV store
+Além disso, reduz significativamente a configuração necessária.
 
-### Consequências
-- ✅ Zero dependências externas
-- ✅ Funciona offline
-- ✅ Fácil backup e inspeção
-- ⚠️ Não escala para milhares de agentes
-- ⚠️ Sem queries complexas
+## Consequências
+
+O Gateway apenas aceita conexões.
+
+Os Agents são responsáveis por manter a comunicação ativa.
 
 ---
 
-## ADR-006: Dashboard Server-Sent Events (SSE)
+# ADR-003 — Comunicação via WebSocket
 
-**Data:** 2026-02-16
-**Status:** Aceito
+## Decisão
 
-### Decisão
-Usar SSE para push de eventos do Gateway ao dashboard, em vez de WebSocket bidirecional.
+Toda a comunicação entre Gateway e Agents utilizará WebSocket.
 
-### Alternativas Consideradas
-1. **WebSocket**: Bidirecional
-2. **Long polling**: HTTP polling
+## Motivação
 
-### Consequências
-- ✅ Mais simples que WebSocket
-- ✅ Funciona através de proxies HTTP
-- ✅ Reconexão automática pelo browser
-- ⚠️ Unidirecional (server → client)
+O WebSocket permite:
 
----
+- Comunicação bidirecional.
+- Baixa latência.
+- Canal temporário durante cada operação.
+- Menor overhead do que HTTP repetitivo.
 
-## ADR-007: Go como linguagem do Gateway
+## Alternativas consideradas
 
-**Data:** 2026-02-16
-**Status:** Aceito
+- HTTP Polling
+- Long Polling
+- gRPC Streaming
 
-### Decisão
-Usar Go para o Gateway devido a: goroutines para concorrência, binário único, excelente suporte a rede, e gorilla/websocket maduro.
-
-### Consequências
-- ✅ Deploy simples (binário único)
-- ✅ Concorrência nativa
-- ✅ Cross-compilation fácil
-- ⚠️ Curva de aprendizado para quem vem de outras linguagens
+O WebSocket foi escolhido por oferecer simplicidade de implementação, excelente suporte em Go e ampla compatibilidade.
 
 ---
 
-## ADR-008: Protocolo JSON (não binário)
+# ADR-004 — JSON como protocolo
 
-**Data:** 2026-02-16
-**Status:** Aceito
+## Decisão
 
-### Decisão
-Usar JSON para todas as mensagens do protocolo.
+As mensagens serão serializadas em JSON.
 
-### Alternativas Consideradas
-1. **Protocol Buffers**: Binário, tipado
-2. **MessagePack**: Binário, compacto
-3. **CBOR**: Binário, IoT-friendly
+## Motivação
 
-### Consequências
-- ✅ Legível e debugável
-- ✅ Fácil de implementar em qualquer linguagem
-- ⚠️ Maior overhead de bytes
-- ⚠️ Parsing mais lento que binário
+JSON é:
 
----
+- Simples.
+- Legível.
+- Fácil de depurar.
+- Amplamente suportado.
 
-## ADR-009: Telemetria sob demanda e parser textual
+Durante o desenvolvimento inicial, a facilidade de inspeção foi considerada mais importante do que desempenho máximo.
 
-**Data:** 2026-10-28
-**Status:** Aceito
+## Futuro
 
-### Contexto
-A Bancada do Agente 03 precisa apresentar grandezas sem manter streaming contínuo nem adicionar um banco de dados ao protótipo.
-
-### Decisão
-Transportar leituras em `Result.stdout`, publicar o Result por SSE e interpretar os formatos textuais no dashboard. As séries permanecem na memória do navegador, com limite de 1.000 amostras e janela de 24 horas.
-
-### Alternativas consideradas
-1. Streaming contínuo por WebSocket do navegador.
-2. Payload JSON específico para cada grandeza.
-3. Persistência imediata em banco de séries temporais.
-
-### Consequências
-- ✅ Reutiliza o ciclo de comando e o SSE já existentes.
-- ✅ Não exige biblioteca de gráficos ou serviço externo.
-- ✅ A deduplicação por `op_id + grandeza` evita pontos repetidos.
-- ⚠️ O parser depende do formato textual do firmware.
-- ⚠️ O timestamp representa o recebimento no navegador.
-- ⚠️ Recarregar a página elimina o histórico local.
+O protocolo poderá evoluir para um formato binário caso seja necessário aumentar a eficiência.
 
 ---
 
-## ADR-010: Dashboard sem framework e sem CDN
+# ADR-005 — Sessões armazenam a conexão
 
-**Data:** 2026-10-28
-**Status:** Aceito
+## Decisão
 
-### Decisão
-Manter o dashboard v5.1 em HTML, CSS e JavaScript puro, desenhar gráficos em SVG e incorporar os arquivos ao binário Go.
+A estrutura Session mantém uma referência para a conexão WebSocket.
 
-### Consequências
-- ✅ Funciona sem Internet e sem etapa de build.
-- ✅ Reduz a cadeia de dependências e facilita auditoria.
-- ✅ Gateway e interface podem ser executados como um único serviço local.
-- ⚠️ O arquivo único concentra apresentação e lógica.
-- ⚠️ Escalas, parser e componentes visuais exigem implementação própria.
+```go
+Conn *websocket.Conn
+```
 
----
+## Motivação
 
-## ADR-011: Tratamento de `MOVER` como comando não idempotente
+Inicialmente apenas o Handler conhecia a conexão.
 
-**Data:** 2026-10-28
-**Status:** Aceito
+Após a refatoração, cada Session passou a encapsular sua própria comunicação.
 
-### Contexto
-A perda do Result de um movimento não comprova que o hardware não recebeu o comando. Reenviar `MOVER` poderia produzir deslocamento adicional.
+Isso permitiu:
 
-### Decisão
-Após `command_sent`, não reenviar automaticamente `MOVER` apenas porque o Result não chegou. O Result desse comando representa início da geração de pulsos, não conclusão física.
-
-### Consequências
-- ✅ Evita duplicar um movimento cuja recepção é incerta.
-- ✅ Torna explícita a diferença entre estado de rede e estado físico.
-- ⚠️ Uma operação pode ficar sem confirmação mesmo com movimento em andamento.
-- ⚠️ A determinação da posição final exige realimentação adicional, ausente no firmware atual.
+- Melhor organização.
+- Desacoplamento.
+- Maior reutilização.
+- Facilidade para envio de comandos.
 
 ---
 
-## ADR-012: Licença MIT
+# ADR-006 — Session Manager
 
-**Data:** 2026-02-16
-**Status:** Aceito
+## Decisão
 
-### Decisão
-O Tunneus será desenvolvido como software livre.
+Todas as sessões são administradas por um gerenciador central.
 
-### Consequências
-- ✅ Comunidade pode contribuir
-- ✅ Transparência total
-- ✅ Adoção facilitada
+## Motivação
+
+Evitar acesso direto a estruturas internas.
+
+Centralizar:
+
+- Busca.
+- Inclusão.
+- Remoção.
+- Listagem.
 
 ---
 
-*Documento gerado em 2026-02-16 pelo ArcanLab Methodology (Fase 3: Extração).*
+# ADR-007 — Heartbeat
+
+> **Status: substituído na v4.** Não existe heartbeat no protocolo atual: o estado do agente é conhecido apenas pelo resultado das operações. O texto abaixo é mantido como registro histórico.
+
+## Decisão
+
+Cada Agent envia um Heartbeat periodicamente.
+
+## Motivação
+
+Permitir que o Gateway saiba quais dispositivos continuam ativos.
+
+Evita depender apenas do encerramento da conexão TCP.
+
+---
+
+# ADR-008 — Arquitetura Semi-Offline
+
+## Decisão
+
+A Internet não será um requisito para o funcionamento da plataforma.
+
+## Motivação
+
+Laboratórios.
+
+Robótica.
+
+Edge Computing.
+
+Redes industriais.
+
+Infraestrutura local.
+
+Todos esses ambientes precisam continuar operando mesmo quando não existe acesso constante à Internet.
+
+## Consequências
+
+Toda funcionalidade crítica deverá funcionar apenas utilizando a rede local.
+
+A Internet servirá apenas para:
+
+- acesso remoto;
+- sincronização;
+- descoberta;
+- integração entre Gateways.
+
+---
+
+# ADR-009 — Gateway único
+
+## Decisão
+
+Cada infraestrutura possui apenas um Gateway principal.
+
+## Motivação
+
+Centralizar:
+
+- autenticação;
+- sessões;
+- comandos;
+- API;
+- interface Web.
+
+Isso reduz complexidade e facilita a administração.
+
+---
+
+# ADR-010 — Go como linguagem principal
+
+## Decisão
+
+Todo o núcleo do Tunneus será desenvolvido em Go.
+
+## Motivação
+
+Go oferece:
+
+- binários únicos;
+- baixo consumo de memória;
+- concorrência nativa;
+- excelente suporte para redes;
+- ótima portabilidade.
+
+Além disso, permite distribuir o Agent sem dependências externas.
+
+---
+
+# ADR-011 — API REST
+
+## Decisão
+
+O Gateway disponibilizará uma API REST.
+
+## Motivação
+
+Permitir integração com:
+
+- Painel Web.
+- Scripts.
+- CLI.
+- Ferramentas externas.
+- APIs de terceiros.
+
+---
+
+# ADR-012 — Exposição técnica e direitos reservados
+
+> **Status: vigente.** Em outubro de 2026, esta decisão substituiu a possibilidade de distribuição como software livre considerada durante o desenvolvimento.
+
+## Decisão
+
+Nesta etapa, o Tunneus é apresentado em repositório privado, com finalidade expositiva e acadêmica, a professores, avaliadores e colaboradores autorizados. O código e a documentação permanecem com todos os direitos reservados.
+
+A disponibilização para leitura não concede direitos de uso, cópia, modificação, redistribuição, sublicenciamento ou comercialização. Uma eventual licença de distribuição será definida explicitamente em decisão futura.
+
+## Motivação
+
+Permitir a avaliação técnica e o acompanhamento acadêmico do projeto enquanto sua forma de distribuição ainda não está decidida.
+
+---
+
+# ADR-013 — Comandos com argumentos opcionais e sem reenvio de efeitos físicos
+
+## Decisão
+
+A mensagem Command ganha o campo opcional `args` (protocolo v4.1). O Gateway valida apenas a forma de `args` (poucos campos, valores escalares, tamanho limitado) e o repassa sem interpretar. O significado de cada argumento é contrato da capability e é validado pelo firmware.
+
+Capabilities cujo efeito físico não pode ser repetido (hoje, `MOVER`) nunca são reenviadas depois que o comando foi entregue. Falhas anteriores à entrega (Wake, autenticação) continuam com retry.
+
+## Motivação
+
+O dashboard do Agente 03 precisa escolher direção, passos e velocidade do motor. Criar uma capability por combinação não escala e esconderia o contrato. Manter o Gateway agnóstico preserva o núcleo genérico para outros agentes.
+
+O retry do Controller assume idempotência. Para `MOVER` isso é falso: se o resultado se perde depois de o motor girar, um reenvio giraria o motor duas vezes.
+
+## Consequências
+
+- Comandos sem parâmetros mantêm o formato da v4.0 byte a byte.
+- Todo firmware que aceitar `args` deve validar tudo antes de acionar o hardware.
+- Uma nova capability física não idempotente deve ser incluída em `nonIdempotentCmds` (`internal/controller/controller.go`).
+- O resultado de `MOVER` confirma o início do movimento, não o fim.
+
+---
+
+# ADR-014 — Dashboard dedicado ao Agente 03, Gateway multiagente
+
+## Decisão
+
+O dashboard (`web/dashboard/index.html`) atende a bancada do Agente 03 (`esp32-03`), sem lista nem seletor de agentes. O Gateway, o Registry, a API, o SSE e o protocolo continuam multiagente, e o dashboard aceita `?agent=<id>` para apontar para outro agente do Registry.
+
+## Motivação
+
+O foco atual de desenvolvimento é a bancada de sensores e o motor de passo. Uma interface específica permite controles e gráficos corretos para essa bancada, sem reduzir a capacidade multiagente do sistema.
+
+## Consequências
+
+- Um painel multiagente genérico é trabalho futuro e não deve exigir mudanças no Gateway.
+- Eventos SSE de outros agentes são ignorados pelo painel.
+- Capabilities do Registry sem controle no painel não ganham botão.
+
+---
+
+# Princípios Fundamentais
+
+Toda contribuição ao projeto deve respeitar os seguintes princípios:
+
+- Simplicidade.
+- Clareza.
+- Código legível.
+- Modularidade.
+- Segurança.
+- Baixo consumo de recursos.
+- Independência da Internet.
+- Arquitetura baseada em agentes.
+- Protocolos transparentes.
+- Facilidade de implantação.
+
+---
+
+# Filosofia
+
+O Tunneus não pretende ser apenas uma ferramenta de acesso remoto.
+
+Seu objetivo é tornar-se uma plataforma completa de gerenciamento de infraestrutura distribuída, capaz de administrar servidores, dispositivos embarcados, robôs e ambientes de computação de borda utilizando uma arquitetura simples, eficiente e resiliente.
+
+A Internet deve ampliar as capacidades do sistema, nunca limitar seu funcionamento.
