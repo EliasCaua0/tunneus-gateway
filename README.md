@@ -1,211 +1,143 @@
 # Tunneus Gateway
 
-![Go 1.26](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat&logo=go)
-![ESP32](https://img.shields.io/badge/ESP32-Arduino-00979D?style=flat&logo=arduino)
-![Protocolo](https://img.shields.io/badge/Protocolo-Tunneus_v4.1-6f42c1?style=flat)
-![Dashboard](https://img.shields.io/badge/Dashboard-v5.1-0a7ea4?style=flat)
-![Status](https://img.shields.io/badge/Status-Protótipo_acadêmico_em_evolução-f0ad4e?style=flat)
+Sistema de comunicação e automação **semi-offline** que conecta um dashboard, um Gateway em Go e agentes ESP32 por meio de operações assíncronas e sessões temporárias autenticadas.
 
-> Infraestrutura semi-offline para orquestração local de dispositivos ESP32, com comandos, telemetria sob demanda e um dashboard web sem dependências externas.
+**Protocolo Tunneus V4.1 · Dashboard v5.1 · Ecossistema ArcanLab**
 
-O Tunneus conecta um **Gateway em Go** a **agentes ESP32** por uma rede local. O dashboard solicita uma operação, o Gateway convoca o agente por **UDP Wake**, o dispositivo abre uma conexão **WebSocket** temporária, autentica-se por **HMAC-SHA256**, executa o comando e devolve o resultado. Em `STANDBY`, o WebSocket permanece fechado.
+> **Finalidade deste repositório:** apresentação técnica do projeto a professores, avaliadores e colaboradores autorizados. O conteúdo é disponibilizado para leitura, avaliação acadêmica e acompanhamento do desenvolvimento. Este repositório não constitui uma distribuição de código aberto; os direitos são reservados e uma eventual licença de distribuição ainda será definida.
 
-Este repositório reúne o Gateway, firmwares de referência, dashboard, documentação e testes com mock. O protótipo não depende de Internet para a operação local principal. O acesso remoto por Tailscale funciona como uma extensão privada e continua em otimização; não é requisito para a comunicação Tunneus na rede local.
+## Visão geral
 
-**Leitura recomendada:** comece pela [visão geral](docs/01-visao-geral.md) e pela [operação ponta a ponta](docs/03-operacao-ponta-a-ponta.md). Para a especificação das mensagens, consulte o [Protocolo Tunneus v4.1](PROTOCOLO.md). Se quiser localizar qualquer implementação, use o [guia de arquivos](docs/17-guia-de-arquivos.md).
+O Tunneus é o projeto central. As bancadas, os protótipos e os agentes físicos são aplicações experimentais utilizadas para demonstrar, testar e validar o sistema, não produtos finais independentes.
 
-## O que já está implementado
-
-- Wake UDP autenticado na porta 18081.
-- Sessões WebSocket temporárias com `Hello`, `Welcome`, `Command`, `Result` e `Bye`.
-- Registry persistente de agentes, capabilities e último IP conhecido.
-- API HTTP na porta 18080, operações assíncronas e eventos SSE.
-- Retries com backoff e tratamento especial para comandos não idempotentes.
-- Dashboard v5.1 em HTML, CSS e JavaScript puro, com quatro visões e gráficos SVG locais.
-- Firmware do Agente 01 para LED e STATUS.
-- Firmware do Agente 03 com BMP180, ACS712, HC-SR04 e motor de passo.
-- Mock Gateway e verificações automatizadas do dashboard.
-- Acesso remoto via Tailscale já utilizado, com otimização e melhoria operacional ainda em andamento.
-
-## Arquitetura em uma visão
+O operador escolhe uma capability no dashboard. O Gateway cria uma operação, convoca o agente por UDP, autentica uma sessão WebSocket temporária, envia o comando e publica o resultado por SSE. O ESP32 executa a ação física e retorna ao estado `STANDBY`.
 
 ```mermaid
 flowchart LR
-    U["Operador"] --> D["Dashboard v5.1<br/>HTML + CSS + JS"]
-    D -->|"HTTP + SSE"| G["Tunneus Gateway<br/>Go · TCP 18080"]
-    G -->|"Wake UDP 18081"| A["ESP32 em STANDBY"]
-    A -->|"WebSocket + HMAC"| G
-    G -->|"Command"| A
-    A -->|"Result + Bye"| G
-    A --> S["Sensores e atuadores"]
+    U[Operador local ou remoto autorizado] --> D[Dashboard]
+    D -->|HTTP REST| G[Tunneus Gateway]
+    G -->|SSE| D
+    G -->|Wake UDP 18081| E[ESP32]
+    E -->|WebSocket temporário| G
+    E --> H[Sensores e atuadores da bancada]
 ```
 
-Os agentes não ficam permanentemente conectados por WebSocket. Esse modelo, chamado **Subagente Passivo + Pico de Conexão**, reduz conexões ociosas e mantém cada dispositivo em espera até receber uma convocação válida.
+Esse modelo é denominado **Subagente Passivo + Pico de Conexão**: o WebSocket permanece fechado em repouso e existe somente durante a execução da operação.
+
+A arquitetura funciona em rede local sem depender de Internet. O acesso remoto por meio de uma rede privada **Tailscale** já existe e amplia o alcance da operação sem expor diretamente os dispositivos à Internet; essa forma de acesso ainda passa por otimização e aprimoramento.
+
+## Trajetória, experimentos e evidências
+
+O projeto surgiu no ecossistema ArcanLab e evoluiu por ciclos de uma metodologia de 3 etapas: exploração, lapidação e extração. O caderno de campo registra essa trajetória desde a concepção até a primeira versão estável apresentada, preservando decisões, experimentos e resultados do desenvolvimento.
+
+O **Agente 03** é uma das aplicações dessa evolução: uma bancada com sensores e motor de passo utilizada para exercitar comunicação, telemetria e acionamento por meio do mesmo núcleo Tunneus. 
+
+**[Ler a trajetória e o papel das bancadas](docs/00-trajetoria-e-bancadas.md)**
+
+## O que está implementado
+
+- Gateway multiagente em Go, com API REST e eventos SSE.
+- Operações assíncronas com HTTP 202 e identificação por `op_id`.
+- Convocação UDP e sessões WebSocket efêmeras.
+- Autenticação por desafio com HMAC-SHA256.
+- Registry de agentes, capabilities e endereços.
+- Firmware para LED, sensores e motor de passo.
+- Dashboard SPA sem bibliotecas externas, com gráficos SVG.
+- Operação local e acesso remoto privado via Tailscale, este último em aprimoramento.
+- Mock Gateway e verificação da interface com Playwright.
+
+## Documentação
+
+A documentação foi organizada como uma trilha progressiva: primeiro a trajetória, a arquitetura e uma operação completa; depois protocolo, segurança e componentes internos; por fim hardware, telemetria, dashboard, implantação e validação.
+
+**[Abrir o índice completo da documentação](docs/README.md)**
+
+| Atalho | Conteúdo |
+|---|---|
+| [Trajetória e bancadas](docs/00-trajetoria-e-bancadas.md) | Evolução do projeto, experimentos e origem das evidências |
+| [Visão geral](docs/01-visao-geral.md) | Finalidade, agentes e capacidades do sistema |
+| [Arquitetura](docs/02-arquitetura.md) | Planos, responsabilidades, canais e portas |
+| [Operação ponta a ponta](docs/03-operacao-ponta-a-ponta.md) | Do clique ao gráfico, passo a passo |
+| [Protocolo V4.1](docs/05-protocolo.md) | Wake, Hello, Welcome, Command, Result e Bye |
+| [Telemetria](docs/10-telemetria.md) | Do sensor ao gráfico no navegador |
+| [API e implantação](docs/12-api-e-implantacao.md) | Rotas, rede local, acesso remoto e diagnóstico |
+| [Glossário](docs/glossario.md) | Termos empregados no projeto |
+
+## Demonstração controlada sem hardware
+
+O mock reproduz as rotas REST e os eventos SSE do Gateway. Ele não se comunica com dispositivos reais e utiliza somente dados sintéticos. Sua finalidade é permitir que o leitor observe a interface e os contratos de comunicação sem acionar uma bancada.
+
+```bash
+python3 tests/dashboard/mock_gateway.py web/dashboard/index.html 18555
+```
+
+Abra `http://127.0.0.1:18555/dashboard/` no navegador. É possível solicitar leituras, acompanhar o Pico de Conexão, observar gráficos e exercitar os controles de movimento em ambiente simulado.
+
+## Consulta à execução experimental
+
+Esta seção documenta como a implementação é executada em ambiente autorizado; não representa um pacote de distribuição nem autoriza o uso fora do acompanhamento do projeto.
+
+### Requisitos
+
+- Go compatível com a versão declarada em `go.mod`;
+- Arduino IDE e suporte ao ESP32 para os firmwares;
+- ArduinoWebsockets, ArduinoJson 6.x e Adafruit BMP085 para o Agente 03;
+- Python e Playwright somente para a verificação automatizada do dashboard.
+
+### Configuração
+
+O arquivo `registry.json` é local e não é versionado. O exemplo de configuração pode ser consultado em `configs/registry.example.json`. Secrets demonstrativas, endereços IP e credenciais de firmware devem ser substituídos antes de qualquer utilização em hardware. A secret do Registry é representada em Base64; no firmware, os mesmos bytes são representados em hexadecimal.
+
+### Build e execução
+
+```bash
+cp configs/registry.example.json registry.json
+go mod tidy
+go build -o tunneus-gateway ./cmd/gateway
+./tunneus-gateway
+```
+
+Em uma instalação configurada, o dashboard fica disponível em `http://localhost:18080/dashboard/` ou no endereço privado correspondente ao Gateway.
+
+### Exemplo de operação
+
+```bash
+curl -X POST http://localhost:18080/api/agents/esp32-03/command \
+  -H 'Content-Type: application/json' \
+  -d '{"cmd":"LER_SENSORES"}'
+```
+
+A resposta HTTP 202 confirma o aceite da intenção, não a conclusão da leitura. O desfecho pode ser acompanhado por `/api/events` ou consultado em `/api/operations/{op_id}`.
 
 ## Estrutura do repositório
 
 ```text
-tunneus-gateway/
-├── cmd/
-│   ├── gateway/           # Inicialização do servidor
-│   └── client/            # Cliente CLI de teste
-├── internal/
-│   ├── api/               # REST, SSE e dashboard
-│   ├── controller/        # Ciclo de vida das operações
-│   ├── protocol/          # Tipos do protocolo
-│   ├── registry/          # Cadastro persistente dos agentes
-│   ├── session/           # Sessões e challenges
-│   ├── wake/              # Convocação UDP
-│   └── websocket/         # Autenticação e mensagens WebSocket
-├── agents/esp32/          # Firmwares de referência
-├── configs/               # Exemplo de registry, sem secrets reais
-├── web/dashboard/         # SPA v5.1, sem dependências externas
-├── tests/dashboard/       # Mock e verificações do dashboard
-├── docs/                  # Documentação didática e decisões técnicas
-└── PROTOCOLO.md           # Especificação do protocolo v4.1
+cmd/gateway/          ponto de entrada do Gateway
+internal/             Controller, API, Registry, sessões e transportes
+agents/esp32/         firmwares e instruções
+web/dashboard/        dashboard v5.1
+tests/dashboard/      mock e verificação com Playwright
+docs/                 apresentação e documentação técnica progressiva
+configs/              exemplos demonstrativos de configuração
 ```
 
-## Dashboard v5.1
+O diretório `cmd/client` preserva um componente histórico da V3 e não integra o build atual.
 
-O painel é uma aplicação de página única servida pelo próprio Gateway. Não usa frameworks, CDN nem etapa de build.
+## Escopo e validação
 
-| Visão | Função principal |
-|---|---|
-| **Visão geral** | Agentes, conectividade e envio de comandos |
-| **Bancada** | Pressão, corrente, distância, passos e velocidade do Agente 03 |
-| **Operações** | Fila, status e resultados das operações |
-| **Eventos** | Histórico local dos eventos SSE |
+O Tunneus foi concebido como uma arquitetura semi-offline: preserva o funcionamento local e utiliza conectividade privada para acesso remoto quando necessário. A telemetria atual é sob demanda, e o histórico visual permanece na memória do navegador.
 
-A Bancada mantém até **1.000 amostras ou 24 horas por grandeza**, apenas na memória do navegador. Os gráficos são redesenhados em SVG; recarregar a página limpa as séries.
+As evidências possuem origens distintas: o caderno de campo documenta experimentos e dados da bancada real; o mock verifica interface e contratos com dados sintéticos. Nenhum dos dois deve ser confundido com uma certificação metrológica, elétrica ou mecânica.
 
-## Agentes de referência
+## Autoria
 
-| Agente | Firmware | Capacidades |
-|---|---|---|
-| **Agente 01** | V4.3-MARATHON | `LED`, `STATUS` |
-| **Agente 02** | Não incluído | Cadastro de referência para polias industriais; sujeito a configuração de hardware e firmware específicos |
-| **Agente 03** | V4.4 | `LER_SENSORES`, `LER_PRESSAO`, `LER_CORRENTE`, `LER_DISTANCIA`, `MOVER`, `STATUS`, `START`, `PARE` |
+- **Elias Cauã de Souza** — desenvolvimento do projeto
+- **Marcelo da Silva dos Santos** — orientação
 
-O Agente 03 utiliza BMP180, ACS712, HC-SR04 e driver de motor de passo. As conversões elétricas dependem de calibração; o movimento é em malha aberta e o `Result` de `MOVER` confirma o início da geração de pulsos, não a conclusão física.
+Instituto Federal Sul-rio-grandense — Campus Novo Hamburgo · Ecossistema ArcanLab.
 
-## Protocolo em resumo
+## Direitos e acesso
 
-1. O dashboard envia `POST /api/agents/:id/command`.
-2. O Gateway responde `202 Accepted` com um `op_id`.
-3. O Controller cria `session_id` e `challenge`, enviando o Wake UDP.
-4. O ESP32 valida o Wake e abre WebSocket em `/ws`.
-5. O `Hello` comprova a posse da secret por HMAC.
-6. O Gateway envia `Welcome` e depois `Command`.
-7. O agente responde `Result` e encerra com `Bye`.
-8. O SSE informa o desfecho ao dashboard; o agente retorna a `STANDBY`.
+Copyright © 2026 Elias Cauã de Souza. **Todos os direitos reservados.**
 
-Os comandos passam por até cinco tentativas. O `op_id` identifica a operação lógica; cada nova tentativa recebe uma sessão e um challenge novos. Após o envio de `MOVER`, a perda do `Result` não provoca reenvio automático do comando.
-
-## Como executar
-
-### Pré-requisitos
-
-- Go 1.26 ou superior;
-- navegador moderno;
-- Python 3 apenas para os testes do mock;
-- Arduino IDE ou PlatformIO para gravar os firmwares;
-- dispositivos na mesma rede local para uma bancada real.
-
-### Gateway
-
-```bash
-go build -o bin/gateway ./cmd/gateway
-export TUNNEUS_SECRET="$(openssl rand -base64 32)"
-./bin/gateway
-```
-
-O Gateway escuta em `:18080`. A secret deve ter 32 bytes após a decodificação Base64 e corresponder à secret hexadecimal configurada no firmware. Nunca publique o valor usado na bancada.
-
-O dashboard fica disponível em `http://localhost:18080`. Sem agentes cadastrados e hardware conectado, ele abre normalmente, mas comandos reais não serão executados.
-
-### Cliente CLI
-
-```bash
-go build -o bin/tunneus ./cmd/client
-./bin/tunneus agent add esp32-01 --caps LED,STATUS --secret "$TUNNEUS_SECRET"
-./bin/tunneus agent list
-./bin/tunneus cmd esp32-01 STATUS
-```
-
-O cliente utiliza `http://localhost:18080`. Para outro endereço, ajuste `apiBase` em `cmd/client/main.go` antes de compilar.
-
-### Firmware
-
-Antes de gravar, configure nos arquivos `.ino`:
-
-- `SUA_REDE_WIFI` e `SUA_SENHA_WIFI`;
-- IP do Gateway na rede local;
-- `SECRET_HEX` correspondente à secret do Gateway;
-- pinagem adequada ao hardware.
-
-Os valores presentes no repositório são **placeholders ou material exclusivamente demonstrativo**. Não representam uma credencial operacional.
-
-### Demonstração sem hardware
-
-```bash
-python3 tests/dashboard/mock_gateway.py
-```
-
-Abra `http://localhost:18080`. O mock gera leituras sintéticas e não deve ser usado como evidência de medição física.
-
-### Verificações do dashboard
-
-Com o mock em execução:
-
-```bash
-python3 tests/dashboard/test_dashboard.py
-```
-
-A suíte cobre navegação, envio assíncrono, telemetria, gráficos e limites de armazenamento. Ela contém expectativas de versões anteriores, incluindo o antigo cartão de fluxo; o resultado deve ser interpretado conforme a [nota de verificação](docs/13-verificacao.md).
-
-## Configuração
-
-| Variável/arquivo | Finalidade |
-|---|---|
-| `TUNNEUS_SECRET` | Secret compartilhada do Gateway |
-| `configs/registry.example.json` | Exemplo de cadastro, sem IPs reais |
-| `configs/registry.json` | Registry local gerado em runtime; ignorado pelo Git |
-| `.env` | Configuração local opcional; ignorada pelo Git |
-
-O Gateway salva o registry no working directory, em `configs/registry.json`. O arquivo de exemplo contém secrets demonstrativas e nunca deve ser usado sem substituição.
-
-## Segurança e limites
-
-- Não há TLS nativo no WebSocket nem na API.
-- O Wake depende do `last_ip` conhecido e de conectividade UDP.
-- Não existe descoberta automática de agentes.
-- A telemetria é sob demanda e não possui persistência no navegador.
-- A posição do motor não é realimentada por encoder ou sensor fim de curso.
-- A documentação não certifica desempenho elétrico, metrológico ou mecânico.
-- A operação local não exige Internet, mas exige energia e a rede local ativa.
-- Tailscale e outras soluções de acesso remoto são camadas complementares, não parte do protocolo Tunneus.
-
-## Documentação
-
-- [Visão geral do sistema](docs/01-visao-geral.md)
-- [Arquitetura e módulos](docs/02-arquitetura.md)
-- [Operação ponta a ponta](docs/03-operacao-ponta-a-ponta.md)
-- [Protocolo Tunneus v4.1](PROTOCOLO.md)
-- [Autenticação e sessões](docs/06-autenticacao.md)
-- [Firmware e hardware](docs/09-firmware-e-hardware.md)
-- [Telemetria e gráficos](docs/10-telemetria.md)
-- [Dashboard v5.1](docs/11-dashboard.md)
-- [API e implantação](docs/12-api-e-implantacao.md)
-- [Guia completo de arquivos](docs/17-guia-de-arquivos.md)
-- [Mensagens de erro](docs/16-mensagens.md)
-- [Glossário](docs/glossario.md)
-
-## Contexto e evolução
-
-O projeto surgiu no ecossistema ArcanLab e evoluiu por ciclos de uma metodologia de 3 etapas: exploração, lapidação e extração. Os documentos distinguem protótipos, bancadas, mock e o Tunneus como projeto central.
-
-O sistema chegou à primeira versão estável apresentada, mas continua em evolução. O acesso remoto via Tailscale já existe e precisa ser otimizado. Não existe, neste repositório, uma distribuição open source nem uma licença de distribuição já decidida: trata-se de material expositivo para professores e colaboradores autorizados.
-
-## Direitos e colaboração
-
-Este repositório é privado e expositivo. A visualização por professores e colaboradores autorizados não implica permissão de redistribuição. Consulte `LICENSE`, `SECURITY.md` e `CONTRIBUTING.md` antes de reutilizar ou alterar o material.
+O acesso ao repositório destina-se a professores, avaliadores e colaboradores autorizados. A disponibilização para leitura não concede direitos de cópia, modificação, redistribuição, sublicenciamento ou comercialização. Consulte o [aviso de direitos](LICENSE) e as [orientações de segurança](SECURITY.md).
