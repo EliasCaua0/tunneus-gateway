@@ -1,95 +1,50 @@
-# Dashboard do Agente 03 — v5.1
+# Dashboard v5.1 — painel do Agente 03
 
-O dashboard do Agente 03 é a visão de bancada do sistema Tunneus. Ele apresenta telemetria de pressão, corrente e distância, além do estado e do controle do motor de passo, em uma SPA servida pelo próprio Gateway.
+Arquivo: `web/dashboard/index.html` (HTML, CSS e JS inline, sem bibliotecas, sem CDN — ADR-008).
+Escopo: o painel atende a bancada do `esp32-03`; não há lista de agentes nem seletor (ADR-014). O Gateway continua multiagente, e `?agent=<id>` aponta o painel para outro agente do Registry (id com letras, números, `_` ou `-`; valor inválido cai em `esp32-03`).
 
-> A bancada registra resultados da operação. Ela não substitui calibração de instrumentos, ensaio de segurança nem certificação metrológica.
+## Fonte de dados
+| Dado | Origem | Observação |
+|:---|:---|:---|
+| Agente (nome, tipo, descrição, estado, capabilities) | `GET /api/agents`, filtrado pelo agente do painel | Polling de 3 s, sem consultas extras |
+| Envio de comando | `POST /api/agents/{id}/command` com `{"cmd": "..."}` | Só `MOVER` envia também `"args"` |
+| Progresso e resultado | `GET /api/events` (SSE) | Eventos de outros agentes são ignorados |
+| Consulta de operação | `GET /api/operations/{id}` | Só após 150 s sem evento final; lê `operation.status` e apenas registra no log |
 
-## 1. Visão geral da interface
+Verificado no código do Gateway (`controller.go`, `agents.go`): schema SSE (`event`, `op_id`, `agent_id`, `command`, `args`, `attempt`, `stdout`, `stderr`, `reason`, `error`), eventos emitidos, `result_received` também com `stderr`, e resposta de `/api/operations/{id}` como `{success, operation:{status,...}}`. O pior caso do Gateway (5 tentativas) fica abaixo dos 150 s do watchdog.
 
-A interface atual mantém quatro visões:
+## Capabilities e estados de uma operação
+A lista de capabilities do Registry decide quais controles ficam ativos. O painel conhece 9: `LER_SENSORES`, `TEMPERATURA`, `PRESSAO`, `ALTITUDE`, `CORRENTE`, `DISTANCIA`, `START`, `PARE`, `MOVER`. As ausentes do Registry ficam desabilitadas e aparecem em "Atenção". Capabilities do Registry sem mapeamento não ganham botão.
 
-- **Visão geral:** agentes cadastrados, conectividade e comandos disponíveis.
-- **Bancada:** grandezas do Agente 03, histórico local e controle do motor.
-- **Operações:** acompanhamento dos comandos assíncronos e de seus resultados.
-- **Eventos:** histórico local dos eventos recebidos por SSE.
+Estados: disponível → **aceito (HTTP 202)** → **em andamento** (Wake, Auth, Cmd) → **confirmado** (`stdout` e `stderr` vazio) ou **falhou** (`stderr`, saída vazia ou `operation_failed`). Também **recusado pela API** e **sem confirmação** (150 s). O 202 nunca é tratado como execução. Uma operação por vez.
 
-A Bancada utiliza cartões numéricos, gráficos SVG e indicadores de estado. Os gráficos são gerados pelo próprio JavaScript, sem bibliotecas externas, CDN ou etapa de build.
+Motivos de `operation_failed` são traduzidos (`REASONS` no código). `result_unconfirmed_no_retry` significa: comando entregue, resultado perdido, **não reenviado**.
 
-## 2. Da leitura ao gráfico
+## Gráficos
+1. Leitura sob demanda (`LER_SENSORES` ou individual). Sem leitura automática.
+2. Resultado por SSE associado ao `op_id`.
+3. Parser estrito: `CHAVE=valor unidade | ...` ou `valor unidade`. `NA`, formato ou unidade inesperados, valor não numérico e `DISTANCIA < 0` viram amostra inválida (marca vermelha no eixo X).
+4. Pressão: Pa → hPa só na exibição. Fluxo: indisponível (sem fonte no firmware).
+5. Deduplicação por `op_id + grandeza`.
+6. Retenção em memória: 1000 amostras por grandeza, 24 h. Recarregar apaga.
+7. Horário da amostra = recebimento no navegador. "Desatualizada" = mais de 5 min.
 
-O fluxo começa com um comando solicitado pelo operador. O Gateway convoca o agente, recebe o `Result` e publica o evento correspondente. O dashboard interpreta o texto devolvido pelo firmware e cria uma amostra local.
+O firmware v4.4 envia `DISTANCIA=NA` na leitura conjunta quando não há eco; a leitura individual de `DISTANCIA` segue devolvendo `stderr`.
 
-```mermaid
-flowchart LR
-    A["LER_SENSORES<br/>ou leitura individual"] --> B["Result.stdout"]
-    B --> C["Evento SSE"]
-    C --> D["Parser do dashboard"]
-    D --> E["Cartão da grandeza"]
-    D --> F["Série em memória"]
-    F --> G["Gráfico SVG"]
-```
+## Motor de passo
+- `START` e `MOVER` exigem dois cliques (confirmação de 4 s); mudar qualquer parâmetro desarma. `PARE` é imediato.
+- `START`: giro contínuo até `PARE` ou 60 s (400 µs, direita).
+- `MOVER`: `{dir: direita|esquerda, steps: 1..30000, speed: lenta|normal|rapida}` (contrato em `PROTOCOLO.md` 3.4.1). O painel valida antes de enviar, o Gateway valida a forma e o firmware valida tudo de novo.
+- Tabela de velocidades duplicada no painel (`MOTOR.speeds`) e no firmware; deve ser mantida igual.
+- O estado exibido é "último comando confirmado" e "possivelmente em movimento até X" (estimativa = passos × 2 × meio-período + 1,5 s, limitada a 60 s). Nunca é estado verificado: o firmware não informa posição nem fim do movimento.
+- `MOVER` com resultado perdido: o motor é marcado como "possivelmente em movimento" e o Gateway não reenvia.
 
-A telemetria é **sob demanda**: não existe um streaming contínuo de sensores. O polling periódico de `/api/agents` atualiza informações dos agentes, não as leituras físicas.
+## Pendências de integração
+1. `registry.json`: preencher `last_ip` do `esp32-03` (o valor anterior era o IP do esp32-02). `InitRegistry` ainda sobrescreve esp32-01/02 com valores fixos.
+2. Calibrar na bancada: sentido físico de "direita" (`DIR_DIREITA_NIVEL_ALTO`) e se `rapida` (200 µs) mantém o torque com carga.
+3. Opcional: fluxo (YF-S201) e DS18B20 no firmware.
+4. Go: o ambiente onde estas mudanças foram feitas não tinha o compilador; rodar `gofmt -l .`, `go vet ./cmd/gateway/... ./internal/...` e `go build -o tunneus-gateway ./cmd/gateway`.
 
-## 3. Grandezas apresentadas
-
-| Grandeza | Origem | Unidade apresentada | Observação |
-|---|---|---|---|
-| Pressão | BMP180 | hPa | Valor convertido pelo firmware |
-| Corrente | ACS712 | A | Depende do zero e da sensibilidade configurados |
-| Distância | HC-SR04 | cm | Medição por tempo de eco |
-| Passos | Estado do firmware | passos | Contagem lógica de movimento |
-| Velocidade | Configuração/estado do motor | passos/s | Não é medição por encoder |
-
-`LER_SENSORES` realiza uma aquisição nova e retorna as cinco grandezas. Os comandos individuais de pressão, corrente e distância utilizam o cache mantido pelo firmware, atualizado a cada dois segundos.
-
-## 4. Interpretação dos resultados
-
-O protocolo transporta `stdout` e `stderr` como texto. O parser reconhece os formatos emitidos pelo firmware do Agente 03. Uma alteração nesses textos exige revisão conjunta do firmware e do dashboard.
-
-A deduplicação usa a combinação `op_id + grandeza`. Isso evita que o reprocessamento de um mesmo evento duplique a amostra correspondente.
-
-## 5. Retenção e timestamps
-
-Cada grandeza mantém no máximo **1.000 amostras** e descarta pontos com mais de **24 horas**. Os dados ficam apenas na memória da página.
-
-O timestamp usado no gráfico é o horário de recebimento no navegador. Ele não representa necessariamente o instante exato da conversão do sensor, pois inclui execução, transporte e entrega do evento.
-
-Recarregar ou fechar a página elimina as séries locais. Para histórico permanente, seria necessária uma camada de persistência ainda não implementada.
-
-## 6. Motor de passo
-
-O controle de movimento utiliza os comandos `MOVER`, `START` e `PARE` conforme as capabilities do agente. `START` e `MOVER` possuem confirmação em dois cliques dentro de quatro segundos; `PARE` é enviado imediatamente quando a interface permite.
-
-O firmware opera em malha aberta. O `Result` de `MOVER` confirma o início da geração de pulsos, não a chegada à posição final. O encerramento do WebSocket não interrompe necessariamente os pulsos já programados.
-
-## 7. Operações e watchdog
-
-O acompanhamento por `op_id` permite relacionar o pedido HTTP ao resultado SSE. A interface sinaliza operações que excedem o watchdog visual de 150 segundos.
-
-Esse watchdog é uma indicação de interface, não uma garantia de cancelamento da goroutine ou da ação física. A perda de um `Result` também não prova que o motor não tenha se movido.
-
-## 8. Proveniência dos dados
-
-A mesma interface pode ser usada com o Gateway real ou com o mock. Essa distinção deve acompanhar qualquer demonstração:
-
-| Fonte | Natureza dos valores |
-|---|---|
-| Agente físico | Resultado do firmware e do hardware |
-| Mock Gateway | Valores sintéticos para teste de software |
-| Registros históricos do caderno | Dados obtidos na bancada real |
-
-O mock não valida BMP180, ACS712, HC-SR04, driver, GPIO ou comportamento mecânico.
-
-## 9. Implementação
-
-- `web/dashboard/index.html`: interface, parser, memória das séries e SVG.
-- `tests/dashboard/mock_gateway.py`: servidor local de demonstração.
-- `tests/dashboard/test_dashboard.py`: verificações históricas da interface.
-- `agents/esp32/agente03/agente03.ino`: aquisição e formato dos resultados.
-
-## 10. Limites de interpretação
-
-Uma curva no gráfico representa os comandos executados e recebidos pelo navegador. Ela não implica amostragem contínua, sincronização precisa com o sensor ou correção de erros instrumentais.
-
-A documentação das verificações deve distinguir o roteiro controlado de 109 verificações da suíte histórica completa, que contém expectativas de versões anteriores do dashboard.
+## Testes
+`tests/dashboard/`: `mock_gateway.py` (REST + SSE simulados, com a mesma validação de `MOVER` do firmware e o formato real de `/api/operations`) e `test_dashboard.py` (suíte histórica em Playwright/Chromium). A verificação controlada das cinco grandezas atuais está documentada em `docs/13-verificacao.md`. Nenhum comando vai ao Gateway real nem ao hardware.
+Executar a partir de `tests/dashboard/`: `PLAYWRIGHT_BROWSERS_PATH=... python3 test_dashboard.py`

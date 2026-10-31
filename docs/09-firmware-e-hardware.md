@@ -88,7 +88,7 @@ Gateway.
 
 | Capability     | Origem                               | Exemplo de `stdout`                             | Condição de interpretação             |
 |----------------|--------------------------------------|-------------------------------------------------|---------------------------------------|
-| `LER_SENSORES` | Aquisição nova de todos os sensores. | `TEMPERATURA=23.45 C | PRESSAO=101325 Pa | ...` | Distância sem eco aparece como `NA`.  |
+| `LER_SENSORES` | Aquisição nova de todos os sensores. | `TEMPERATURA=23.45 C \| PRESSAO=101325 Pa \| ...` | Distância sem eco aparece como `NA`.  |
 | `TEMPERATURA`  | Cache.                               | `23.45 C`                                       | Unidade esperada: C.                  |
 | `PRESSAO`      | Cache.                               | `101325 Pa`                                     | O dashboard converte Pa para hPa.     |
 | `ALTITUDE`     | Cálculo sobre o cache.               | `28.10 m`                                       | Depende da pressão de referência.     |

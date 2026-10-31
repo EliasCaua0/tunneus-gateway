@@ -1,55 +1,166 @@
-# API, implantação e acesso remoto
+[← Índice da documentação](README.md)
 
-## 1. Execução local
+# 12. API, implantação e diagnóstico
 
-Compile o Gateway, defina `TUNNEUS_SECRET` e execute a partir da raiz do projeto para que o caminho relativo `configs/registry.json` seja o esperado.
+> **Neste capítulo:** Os conceitos passam a ser usados de forma prática:
+> consultar a API, preparar o Registry, executar o Gateway e localizar a
+> camada correspondente a cada sintoma.
 
-```bash
-go build -o bin/gateway ./cmd/gateway
-export TUNNEUS_SECRET="$(openssl rand -base64 32)"
-./bin/gateway
+## 12.1 Rotas públicas
+
+A API reúne poucas rotas, cada uma ligada a uma responsabilidade
+arquitetural. O navegador usa REST para listar agentes, submeter
+comandos e consultar operações; o SSE distribui os marcos; a rota `/ws`
+é destinada ao agente, não ao dashboard.
+
+**Tabela 20 — Rotas expostas pelo Gateway**
+
+| Método e rota                   | Resposta                 | Finalidade                                                  |
+|---------------------------------|--------------------------|-------------------------------------------------------------|
+| `GET /`                         | Texto simples.           | Retorna “Tunneus Gateway Online”.                           |
+| `GET /health`                   | JSON.                    | Informa processo online e versão.                           |
+| `GET /api/agents`               | 200, lista JSON.         | Apresenta a visão pública dos agentes, sem secret e sem IP. |
+| `POST /api/agents/{id}/command` | 202 ou erro de contrato. | Valida e cria uma operação assíncrona.                      |
+| `GET /api/operations/{id}`      | 200 ou 404.              | Consulta o estado da operação.                              |
+| `GET /api/events`               | `text/event-stream`.     | Publica os eventos para clientes conectados.                |
+| `GET /dashboard/`               | Arquivos estáticos.      | Serve o dashboard v5.1.                                     |
+| `/ws`                           | Upgrade WebSocket.       | Recebe Hello e demais mensagens do agente.                  |
+
+### Exemplo de submissão
+
+    POST /api/agents/esp32-03/command
+    Content-Type: application/json
+
+    {"cmd":"MOVER","args":{"dir":"direita","steps":200,"speed":"normal"}}
+
+    HTTP/1.1 202 Accepted
+    {
+      "success": true,
+      "op_id": "UUID",
+      "agent_id": "esp32-03",
+      "command": "MOVER",
+      "status": "pending"
+    }
+
+O campo `op_id` permite consultar `/api/operations/{id}`. O
+acompanhamento recomendado é pelo SSE, pois os eventos comunicam as
+transições assim que ocorrem. As operações ficam em memória, com
+retenção aproximada de 30 min, e não sobrevivem ao reinício do processo.
+
+## 12.2 Topologia de implantação
+
+A base da instalação reúne navegador, Gateway e agentes na mesma rede
+local roteável. O Gateway escuta TCP 18080 para HTTP, SSE, dashboard e
+WebSocket; os agentes escutam UDP 18081 para Wake. O endereço usado no
+firmware é o do Gateway, enquanto o Registry mantém o último IP
+conhecido de cada agente. Um operador remoto autorizado também pode
+alcançar o Gateway por uma rede privada Tailscale.
+
+```mermaid
+flowchart TB
+ subgraph LAN[Rede local do laboratorio]
+  B[Navegador do operador local] -->|TCP 18080 HTTP e SSE| S[Servidor Tunneus Gateway]
+  S -->|UDP 18081 Wake| A1[ESP32 Agente 01]
+  S -->|UDP 18081 Wake| A3[ESP32 Agente 03]
+  A1 -->|TCP 18080 /ws| S
+  A3 -->|TCP 18080 /ws| S
+  S --> F[web/dashboard]
+  S --> R[registry.json]
+ end
+ U[Operador remoto autorizado] -->|Rede privada Tailscale| S
+ B -.sem Internet.-> L[Rede local autonoma]
 ```
 
-Abra `http://localhost:18080`.
+**Figura 24** — Topologia de implantação. O navegador nunca precisa
+conhecer o IP do ESP32; o agente, por sua vez, conhece o endereço do
+Gateway para abrir o WebSocket. O acesso remoto utiliza a rede privada e
+não altera o protocolo entre Gateway e agentes.
 
-## 2. Rede
+### Acesso remoto e arquitetura semi-offline
 
-Computador, Gateway e agentes precisam de conectividade IP. Firewalls devem permitir TCP 18080 e UDP 18081. Redes com isolamento de clientes podem bloquear Wake ou WebSocket.
+O acesso via Tailscale já funciona: o operador e o Gateway integram uma
+rede privada e o dashboard pode ser alcançado por um endereço privado
+autorizado. Essa conectividade não exige exposição direta do serviço à
+Internet e não modifica Wake, Hello, Command ou Result.
 
-## 3. Registry
+A capacidade remota ainda precisa ser otimizada e aprimorada em sua
+experiência operacional, robustez e administração. O princípio permanece:
+a rede local sustenta o sistema de forma autônoma, e o acesso externo é
+uma extensão controlada, não uma dependência para toda operação.
 
-Cadastre capabilities compatíveis com o firmware. O `last_ip` é necessário para Wake e é atualizado após autenticação WebSocket.
+## 12.3 Preparação por etapas
 
-Não publique o registry real. O arquivo de exemplo usa endereços de documentação e secret exclusivamente demonstrativa.
+1.  **Ambiente do Gateway.** Utilizar Go compatível com o `go.mod`, que
+    declara Go 1.24.4, e obter as dependências do módulo.
+2.  **Ambiente do firmware.** Preparar Arduino IDE 2.x, suporte ao ESP32
+    DevKit, ArduinoWebsockets, ArduinoJson 6.x e Adafruit BMP085 para o
+    Agente 03.
+3.  **Registry.** Definir identificador único, secret forte em Base64,
+    IP alcançável, nome e capabilities exatas. Não reutilizar secrets de
+    demonstração.
+4.  **Firmware.** Configurar SSID, senha, IP do Gateway, identidade e
+    bytes da secret. Conferir pinagem, alimentação, referência
+    barométrica, calibração do ACS712 e sentido de DIR.
+5.  **Rede.** Liberar TCP 18080 e UDP 18081 conforme a topologia.
+    Verificar no Serial o IP, RSSI, bind UDP e inicialização do BMP180.
+6.  **Execução.** Compilar o ponto de entrada atual, iniciar o Gateway e
+    abrir `http://IP_DO_GATEWAY:18080/dashboard/`.
 
-## 4. Firmware
+    cd /raiz/do/repositorio
+    go mod tidy
+    go vet ./cmd/gateway ./internal/...
+    go build -o tunneus-gateway ./cmd/gateway
+    ./tunneus-gateway
 
-Configure SSID, senha, IP do Gateway e secret hexadecimal. Confira pinagem e alimentação antes de conectar atuadores.
+O build é direcionado a `./cmd/gateway`. O diretório `cmd/client`
+preserva um componente histórico da V3 e não integra o executável atual.
 
-## 5. Funcionamento sem Internet
+### Exemplos de operação programática
 
-Não existe um “modo offline” especial a ativar: a arquitetura já opera localmente. O dashboard, o REST, o SSE, o Wake e o WebSocket podem usar apenas a rede local.
+    # Listar agentes
+    curl http://localhost:18080/api/agents
 
-Para testar uma queda de Internet, mantenha a rede local e desconecte a WAN no roteador. Desligar o Wi-Fi do computador também elimina sua conectividade local e impede o acesso ao dashboard.
+    # Solicitar leitura conjunta
+    curl -X POST http://localhost:18080/api/agents/esp32-03/command \
+      -H 'Content-Type: application/json' \
+      -d '{"cmd":"LER_SENSORES"}'
 
-Se faltar energia ou o roteador local desligar, a operação é interrompida. O acesso remoto habitual pode ficar indisponível sem conectividade externa.
+    # Consultar a operação retornada
+    curl http://localhost:18080/api/operations/OP_ID
 
-O repositório não registra ensaio físico formal com a WAN desconectada.
+## 12.4 Diagnóstico orientado pelo fluxo
 
-## 6. Tailscale
+Em vez de tratar qualquer sintoma como “o sistema não funciona”, o
+diagnóstico acompanha a última etapa conhecida. HTTP 400 aponta para
+contrato ou capability; ausência de autenticação desloca a atenção para
+Wake, rede ou secret; Result válido sem gráfico desloca a análise para
+SSE, parser e janela temporal.
 
-O acesso remoto via Tailscale já funciona e precisa ser otimizado. Ele pode permitir que um computador autorizado alcance o Gateway por uma rede privada.
+**Tabela 21 — Sintomas e verificações por camada**
 
-Tailscale não substitui:
+| Sintoma                       | Camada provável             | Verificação orientada                                                     |
+|-------------------------------|-----------------------------|---------------------------------------------------------------------------|
+| 400 “comando não suportado”   | Registry / contrato.        | Conferir grafia e presença da capability no agente.                       |
+| Wake por IP desconhecido      | Cadastro de endereço.       | Obter o IP no Serial e atualizar `last_ip`.                               |
+| `auth_timeout`                | Wake, rede ou autenticação. | Verificar UDP 18081, TCP 18080, logs e equivalência da secret.            |
+| HMAC inválido no ESP          | Configuração criptográfica. | Comparar bytes decodificados, não as strings Base64 e HEX.                |
+| SSE desconectado              | Canal de eventos.           | Acessar `/api/events` e observar a reconexão.                             |
+| Gráfico vazio                 | Aquisição ou histórico.     | Solicitar leitura e verificar Results, parser e janela selecionada.       |
+| Distância inválida            | Sensor ou interpretação.    | Verificar TRIG/ECHO, timeout de 30 ms e `stderr`/`NA`.                    |
+| Motor parou após 60 s         | Proteção do firmware.       | Comportamento esperado; novo START/MOVER renova a janela.                 |
+| `result_unconfirmed_no_retry` | Resultado não confirmado.   | MOVER já foi entregue; inspecionar a bancada e evitar reenvio automático. |
 
-- o cadastro do agente;
-- o Wake UDP;
-- o WebSocket;
-- o HMAC;
-- as regras de operação e segurança.
+> **Método de diagnóstico:** Identifique a operação, observe o último
+> evento e examine o componente responsável pela etapa seguinte. Os
+> identificadores e eventos da arquitetura funcionam como instrumentos
+> de rastreio.
 
-Não publique endereços da tailnet, chaves ou regras de acesso.
+## Código e referências relacionadas
 
-## 7. Mock
+- [Rotas HTTP](../internal/server/server.go)
+- [API de agentes](../internal/api/agents.go)
+- [Registry de exemplo](../configs/registry.example.json)
 
-Execute `python3 tests/dashboard/mock_gateway.py` para demonstrar a interface sem hardware. O mock usa a mesma porta HTTP padrão; não execute dois servidores simultaneamente na mesma porta.
+---
+
+[Voltar ao índice da documentação](README.md)
