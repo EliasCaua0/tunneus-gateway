@@ -1,20 +1,21 @@
-# Segredos e configuração local
-.env
-configs/registry.json
-
-# Binários e saídas locais
-bin/
-dist/
 *.exe
-*.test
 *.out
+*.log
 
-# Python
+.env
+
+bin/
+
+vendor/
+tunneus-gateway
+
+# Configuracao local e credenciais
+registry.json
+*.local.json
+secrets.*
+
+# Artefatos de verificacao e build
+tests/dashboard/shots/
+*.pdf
 __pycache__/
-*.pyc
-
-# IDEs e sistema
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
+.pytest_cache/
