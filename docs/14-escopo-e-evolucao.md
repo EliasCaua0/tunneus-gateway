@@ -1,48 +1,66 @@
-# Escopo, limites e evolução
+[← Índice da documentação](README.md)
 
-O Tunneus é um protótipo acadêmico funcional em evolução. A documentação separa capacidades presentes de melhorias planejadas.
+# 14. Escopo atual e evolução do projeto
 
-## 1. Capacidades presentes
+> **Neste capítulo:** A versão atual é delimitada como uma arquitetura
+> funcional de laboratório. As expansões são organizadas a partir das
+> camadas já existentes, preservando o núcleo comum.
 
-- Operação local com Gateway Go.
-- Wake UDP autenticado.
-- WebSocket temporário com HMAC.
-- API REST e SSE.
-- Dashboard sem dependências externas.
-- Telemetria sob demanda.
-- Firmwares dos Agentes 01 e 03.
-- Mock para testes.
-- Acesso remoto via Tailscale já funcional, com otimização pendente.
+## 14.1 O que a arquitetura já estabelece
 
-## 2. Limites técnicos
+O projeto estabelece um ciclo completo e reutilizável: identidade do
+agente, autorização por capability, operação assíncrona, convocação,
+autenticação mútua por desafio, sessão temporária, resultado e
+apresentação. Sensores e atuadores entram nesse ciclo por meio do
+firmware, sem alterar os contratos centrais.
 
-- Sem TLS nativo.
-- Sem mDNS ou descoberta automática.
-- Sem persistência de telemetria no navegador.
-- Sem confirmação física de posição.
-- Sem RBAC e audit log.
-- Sem alta disponibilidade do Gateway.
-- Sem distribuição open source definida.
+**Tabela 23 — Escopo funcional da versão apresentada**
 
-## 3. Evolução técnica
+| Dimensão     | Forma atual                                       | Consequência arquitetural                              |
+|--------------|---------------------------------------------------|--------------------------------------------------------|
+| Comunicação  | Rede local e acesso remoto privado via Tailscale. | Operação semi-offline; acesso remoto em otimização.    |
+| Dispositivos | Gateway multiagente e dashboard especializado.    | Núcleo comum com apresentação dedicada à bancada.      |
+| Aquisição    | Cache local e leituras sob demanda.               | Sem streaming contínuo para o Gateway.                 |
+| Histórico    | Memória do navegador, até 1000 pontos e 24 h.     | Visualização da sessão, sem banco de séries temporais. |
+| Movimento    | Pulsos programados, sem realimentação de posição. | Result confirma início; conclusão permanece local.     |
+| Operação     | Sessões e operações efêmeras.                     | Reinício do processo não preserva o histórico.         |
 
-Prioridades documentadas no roadmap:
+## 14.2 Expansões organizadas por camada
 
-1. Otimizar o acesso remoto existente.
-2. Melhorar segurança de transporte.
-3. Acrescentar descoberta e atualização de firmware.
-4. Persistir telemetria com retenção definida.
-5. Ampliar testes de integração.
-6. Reavaliar confirmação e parada de movimento.
+A separação entre núcleo, protocolo, firmware e apresentação oferece
+pontos claros de evolução. Novas funções podem ser incorporadas sem
+abandonar o modelo de convocação e operação local.
 
-## 4. Evolução da apresentação
+**Tabela 24 — Direções de evolução registradas para o ecossistema**
 
-O repositório deve manter clara a diferença entre Tunneus, protótipos, bancadas e mock. Exemplos sanitizados não devem ser confundidos com credenciais operacionais.
+| Camada       | Possível evolução                                                  | Contribuição                                              |
+|--------------|--------------------------------------------------------------------|-----------------------------------------------------------|
+| Telemetria   | Dados estruturados, timestamp do dispositivo, latência e métricas. | Histórico mais rico e comparação entre experimentos.      |
+| Bancada      | Novas grandezas, conclusão do movimento e leitura de posição.      | Mais formas de aquisição e realimentação física.          |
+| Multiagente  | Seleção de dispositivos e composição por capabilities.             | Vários experimentos apresentados sobre o mesmo núcleo.    |
+| Comunicação  | Otimização do acesso via Tailscale, descoberta UDP e integrações.  | Acesso remoto mais robusto e configuração simplificada.   |
+| Persistência | Histórico de operações e séries temporais.                         | Consulta posterior e acompanhamento de longa duração.     |
+| Pesquisa     | OTA, deep sleep, mesh e protocolos binários.                       | Novos compromissos entre energia, desempenho e autonomia. |
 
-## 5. Licenciamento
+## 14.3 Como um novo experimento se encaixa
 
-O material é expositivo e privado, destinado a professores e colaboradores autorizados. A licença de distribuição ainda não foi decidida. Direitos reservados e aviso de copyright não equivalem a uma decisão de open source.
+1.  **Definir a capability.** Escolher um nome público e o significado
+    físico da ação.
+2.  **Cadastrar o agente.** Criar identidade, secret, endereço e lista
+    de capabilities no Registry.
+3.  **Implementar o firmware.** Reutilizar a máquina de estados e
+    acrescentar a lógica local do hardware.
+4.  **Definir o contrato de resultado.** Estabelecer texto, unidade e
+    condições de erro compreensíveis pelo cliente.
+5.  **Adaptar a apresentação.** Criar controles e visualizações sem
+    transferir regras físicas para o Gateway.
+6.  **Verificar por camadas.** Exercitar contrato, comunicação,
+    interface e bancada com evidências próprias.
 
-## 6. Roadmap não é implementação
+Esse percurso mostra a principal qualidade estrutural do projeto: o
+experimento pode mudar sem exigir uma nova arquitetura de comunicação. O
+que se expande é o conjunto de capacidades e de apresentações, não a
+responsabilidade de cada plano.
+---
 
-Itens futuros descrevem intenção. A referência para comportamento atual é o código acompanhada das notas de verificação e dos limites documentados.
+[Voltar ao índice da documentação](README.md)

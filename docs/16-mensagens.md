@@ -1,46 +1,91 @@
-# Mensagens e diagnóstico
+[← Índice da documentação](README.md)
 
-Esta referência reúne mensagens e situações frequentes. Os textos exatos podem variar por componente e versão.
+# Apêndice A. Mensagens exemplificadas
 
-## 1. HTTP e API
+Os exemplos seguintes reúnem o vocabulário V4.1 em uma sequência única.
+UUIDs, challenge e MACs são deliberadamente representados por
+marcadores; nenhuma credencial real é incluída.
 
-| Situação | Interpretação |
-|---|---|
-| HTTP 202 | Operação aceita, não concluída |
-| Agente inexistente | Cadastro ausente ou ID incorreto |
-| Capability inválida | Comando não cadastrado para o agente |
-| Secret inválida | Base64 ou tamanho decodificado incorreto |
+## A.1 Wake
 
-## 2. Wake e sessão
+    {
+      "type": "wake",
+      "agent_id": "esp32-03",
+      "session_id": "SESSION_UUID",
+      "challenge": "CHALLENGE_HEX_64_CARACTERES",
+      "auth_mac": "HMAC_SHA256_CHALLENGE_E_AGENT_ID"
+    }
 
-| Situação | Verificação |
-|---|---|
-| Agente offline | `last_ip`, rota UDP e energia |
-| Hello não chega | IP do Gateway no firmware e TCP 18080 |
-| `AUTH_FAILED` | Mesma secret em bytes e challenge correto |
-| `SESSION_EXPIRED` | Tempo entre Wake e Hello |
-| `SESSION_NOT_FOUND` | Sessão limpa ou ID incorreto |
+## A.2 Hello
 
-## 3. Result
+    {
+      "type": "hello",
+      "agent_id": "esp32-03",
+      "session_id": "SESSION_UUID",
+      "challenge_response": "HMAC_SHA256_DO_CHALLENGE",
+      "agent": "esp32",
+      "version": "4.4"
+    }
 
-- `status: success`: o firmware respondeu sucesso para a operação lógica.
-- `status: error`: consultar `stderr` e `exit_code`.
-- `MOVER` com sucesso: início aceito, não conclusão física.
+## A.3 Welcome
 
-## 4. Dashboard
+    {
+      "type": "welcome",
+      "session": "SESSION_UUID",
+      "authenticated": true
+    }
 
-| Sintoma | Possível causa |
-|---|---|
-| Sem eventos | SSE desconectado ou Gateway indisponível |
-| Agentes desatualizados | Polling sem resposta |
-| Gráficos vazios | Nenhum Result reconhecido |
-| Dados somem ao recarregar | Retenção apenas em memória |
-| Operação antiga destacada | Watchdog visual de 150 s |
+## A.4 Command sem argumentos
 
-## 5. Rede local
+    {
+      "type": "command",
+      "command_id": "OPERATION_UUID",
+      "cmd": "LER_SENSORES"
+    }
 
-Se o dashboard parar quando o Wi-Fi do computador for desligado, a rede local também foi perdida. Para testar ausência de Internet, mantenha a LAN ativa e desconecte somente a WAN.
+## A.5 Command com argumentos
 
-## 6. Diagnóstico seguro
+    {
+      "type": "command",
+      "command_id": "OPERATION_UUID",
+      "cmd": "MOVER",
+      "args": {"dir": "direita", "steps": 200, "speed": "normal"}
+    }
 
-Não enviar comandos a hardware de terceiros. Não publicar logs com secrets, endereços privados ou configuração de tailnet. Em falhas de movimento, priorizar segurança física e os procedimentos da bancada.
+## A.6 Result de leitura
+
+    {
+      "type": "result",
+      "command_id": "OPERATION_UUID",
+      "stdout": "23.45 C",
+      "stderr": ""
+    }
+
+## A.7 Result conjunto
+
+    {
+      "type": "result",
+      "command_id": "OPERATION_UUID",
+      "stdout": "TEMPERATURA=23.45 C | PRESSAO=101325 Pa | ALTITUDE=28.10 m | CORRENTE=0.123 A | DISTANCIA=35.2 cm",
+      "stderr": ""
+    }
+
+## A.8 Bye
+
+    {
+      "type": "bye",
+      "session_id": "SESSION_UUID",
+      "reason": "ack_timeout"
+    }
+
+## A.9 Evento de resultado por SSE
+
+    event: message
+    data: {"event":"result_received","op_id":"OPERATION_UUID","agent_id":"esp32-03","stdout":"23.45 C","stderr":""}
+
+A forma exata dos campos adicionais de cada evento depende da etapa
+publicada pelo Controller. O exemplo destaca os campos necessários para
+relacionar agente, operação e resultado.
+---
+
+[Voltar ao índice da documentação](README.md)
