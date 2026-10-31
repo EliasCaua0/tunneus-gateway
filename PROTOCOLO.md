@@ -1,11 +1,19 @@
-# Protocolo Tunneus v4.1
+# Protocolo Tunneus V4.1
 
-## Visão Geral
+Especificação do protocolo de comunicação entre Gateway e Subagentes
 
-O protocolo Tunneus v4.0 utiliza um modelo híbrido:
+## 1. Visão Geral
 
-1. **UDP Wake**: Gateway acorda o agente ESP32
-2. **WebSocket**: Agente conecta de volta e executa comandos
+O protocolo Tunneus V4.1 opera sobre duas camadas de transporte:
+
+| Camada | Protocolo | Uso |
+| --- | --- | --- |
+| Sinalização | UDP (porta 18081) | Convocação do subagente (Wake Packet) |
+| Dados | WebSocket (porta 18080) | Autenticação, comandos e resultados |
+
+### Princípio: Subagente Passivo
+
+O subagente (ESP32) não abre conexões por iniciativa própria. Ele permanece em STANDBY ouvindo UDP e só abre o WebSocket quando convocado pelo Gateway.
 
 ## 2. Fluxo Completo
 
@@ -45,200 +53,301 @@ HTTP, SSE e WebSocket utilizam TCP 18080; o UDP 18081 é reservado à convocaç�
 
 ## 3. Mensagens
 
-### 3.1 Wake (Gateway → ESP32, UDP)
+### 3.1 Wake Packet (UDP)
 
-```json
+Direção: Gateway → ESP
+
+Transporte: UDP unicast, porta 18081
+
+```
 {
-  "type": "wake",
-  "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "agent_id": "esp32-01",
-  "challenge": "a1b2c3d4e5f6...",
-  "auth_mac": "hmac_sha256_hex",
-  "timestamp": "2026-02-16T12:00:00Z"
+"type": "wake",
+"agent_id": "esp32-01",
+"session_id": "550e8400-e29b-41d4-a716-446655440000",
+"challenge": "a1b2c3d4e5f6...",
+"auth_mac": "hmac-sha256(challenge + agent_id, secret)"
 }
 ```
 
 | Campo | Tipo | Descrição |
-|---|---|---|
-| `type` | string | Sempre `"wake"` |
-| `session_id` | string | UUID da sessão |
-| `agent_id` | string | ID do agente alvo |
-| `challenge` | string | 32 bytes em hex |
-| `auth_mac` | string | HMAC-SHA256(challenge \|\| agent_id) |
-| `timestamp` | string | ISO 8601 |
+| --- | --- | --- |
+| type | string | Sempre "wake" |
+| agent_id | string | Identificador do subagente |
+| session_id | string | UUID v4 único da sessão |
+| challenge | string | Hex 64 caracteres (32 bytes) |
+| auth_mac | string | HMAC-SHA256(challenge \|\| agent_id, secret) em hex |
 
-### 3.2 Hello (ESP32 → Gateway, WebSocket)
+#### Validação no ESP
 
-```json
-{
-  "type": "hello",
-  "agent_id": "esp32-01",
-  "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "challenge_response": "hmac_sha256_hex",
-  "firmware_version": "1.0.0",
-  "capabilities": ["LED", "STATUS"]
-}
+1. Verificar `type == "wake"`.
+2. Verificar se `agent_id` corresponde ao próprio agente.
+3. Calcular `expected = HMAC-SHA256(challenge || agent_id, secret)`.
+4. Comparar `expected` com `auth_mac`, sem distinção entre maiúsculas e minúsculas no hexadecimal.
+5. Se for válido, transicionar para `CONNECTING`.
+
+### 3.2 Hello (WebSocket)
+
+Direção: ESP → Gateway
+
+Transporte: WebSocket (primeira mensagem após upgrade)
+
 ```
-
-*Table 1 – continued*
-
-| Campo | Tipo | Descrição |
-|---|---|---|
-| `type` | string | Sempre `"hello"` |
-| `agent_id` | string | ID do agente |
-| `session_id` | string | Mesmo session_id do Wake |
-| `challenge_response` | string | HMAC-SHA256(challenge) |
-| `firmware_version` | string | Versão do firmware |
-| `capabilities` | []string | Comandos suportados |
-
-### 3.3 Welcome (Gateway → ESP32)
-
-```json
 {
-  "type": "welcome",
-  "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "message": "Authenticated successfully"
-}
-```
-
-### 3.4 Command (Gateway → ESP32)
-
-```json
-{
-  "type": "command",
-  "command_id": "op-uuid",
-  "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "cmd": "LED",
-  "args": {
-    "action": "on",
-    "duration_ms": 1000
-  }
+"type": "hello",
+"agent_id": "esp32-01",
+"session_id": "550e8400-e29b-41d4-a716-446655440000",
+"challenge_response": "hmac-sha256(challenge, secret)",
+"agent": "esp32-agent",
+"version": "4.3-MARATHON"
 }
 ```
 
 | Campo | Tipo | Descrição |
-|---|---|---|
-| `type` | string | Sempre `"command"` |
-| `command_id` | string | ID único do comando |
-| `session_id` | string | Sessão atual |
-| `cmd` | string | Nome do comando |
-| `args` | object | Argumentos (opcional) |
+| --- | --- | --- |
+| type | string | Sempre "hello" |
+| agent_id | string | Identificador do subagente |
+| session_id | string | Mesmo UUID do Wake Packet |
+| challenge_response | string | HMAC-SHA256(challenge, secret) em hex |
+| agent | string | Nome do agente (opcional) |
+| version | string | Versão do firmware (opcional) |
 
-### 3.5 Result (ESP32 → Gateway)
+#### Validação no Gateway
 
-```json
+1. Buscar a sessão efêmera por `session_id`.
+2. Se não for encontrada, rejeitar a conexão, pois o ESP se apresentou sem uma convocação pendente.
+3. Buscar o agente no Registry por `agent_id`.
+4. Calcular `expected = HMAC-SHA256(challenge, secret)`.
+5. Comparar o resultado com `challenge_response`.
+6. Se for válido, enviar `Welcome` e notificar o Controller.
+
+### 3.3 Welcome (WebSocket)
+
+Direção: Gateway → ESP
+
+```
 {
-  "type": "result",
-  "command_id": "op-uuid",
-  "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "success",
-  "stdout": "LED ligado por 1000ms",
-  "stderr": "",
-  "exit_code": 0
+"type": "welcome",
+"session": "550e8400-e29b-41d4-a716-446655440000",
+"authenticated": true
 }
 ```
 
-*Table 2 – continued*
-
 | Campo | Tipo | Descrição |
-|---|---|---|
-| `type` | string | Sempre `"result"` |
-| `command_id` | string | ID do comando |
-| `session_id` | string | Sessão atual |
-| `status` | string | `"success"` ou `"error"` |
-| `stdout` | string | Saída padrão |
-| `stderr` | string | Saída de erro |
-| `exit_code` | int | Código de saída (0 = OK) |
+| --- | --- | --- |
+| type | string | Sempre "welcome" |
+| session | string | SessionID confirmado |
+| authenticated | bool | true se autenticado |
 
-### 3.6 Bye (ESP32 → Gateway)
+### 3.4 Command (WebSocket)
 
-```json
+**Direção:** Gateway → ESP
+
+```
 {
-  "type": "bye",
-  "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "reason": "completed"
+"type": "command",
+"command_id": "op-123-uuid",
+"cmd": "LED_ON"
 }
 ```
 
-*Table 3 – continued*
-
 | Campo | Tipo | Descrição |
-|---|---|---|
-| `type` | string | Sempre `"bye"` |
-| `session_id` | string | Sessão atual |
-| `reason` | string | Motivo do encerramento |
+| --- | --- | --- |
+| type | string | Sempre "command" |
+| command_id | string | ID da operação |
+| cmd | string | Comando a executar |
+| args | object | Opcional (V4.1). Parâmetros do comando; ausente quando não há. |
 
-### 3.7 Error (Bidirecional)
+#### 3.4.1 Command com argumentos (v4.1)
 
-```json
+O campo `args` é opcional. Sem ele a mensagem é idêntica à da v4.0, portanto agentes e comandos existentes (LED_ON, LIGAR, START, LER_SENSORES...) não mudam.
+
+O Gateway não interpreta `args`: apenas valida a forma e o repassa. O significado de cada campo é contrato da capability e é validado pelo firmware, que recusa argumento inválido via stderr sem tocar no hardware.
+
+Limites verificados pelo Gateway (HTTP 400 se excedidos):
+
+| Regra | Valor |
+| --- | --- |
+| Campos em args | no máximo 8 |
+| Nome do campo | 1 a 24 caracteres |
+| Valores | texto, número ou booleano (sem objetos nem listas) |
+| Texto | no máximo 32 caracteres |
+| args serializado | no máximo 256 bytes |
+
+O limite existe porque o ESP32 interpreta a mensagem em um documento JSON de tamanho fixo.
+
+Requisição REST correspondente: POST /api/agents/{id}/command com {"cmd":"MOVER","args":{...}}. O campo `args` é repassado sem alteração e também aparece no evento SSE command_created.
+
+##### Capability MOVER (Agente 03, firmware V4.4) — exemplo
+
+Executa um número fixo de passos do motor de passo.
+
+```
 {
-  "type": "error",
-  "code": "AUTH_FAILED",
-  "message": "Invalid HMAC signature",
-  "session_id": "550e8400-e29b-41d4-a716-446655440000"
+"type": "command",
+"command_id": "op-123-uuid",
+"cmd": "MOVER",
+"args": { "dir": "direita", "steps": 200, "speed": "normal" }
 }
 ```
 
-*Table 4 – continued*
+| Campo | Tipo | Valores válidos |
+| --- | --- | --- |
+| dir | string | "direita" ou "esquerda" |
+| steps | inteiro | 1 a 30000 |
+| speed | string | "lenta", "normal" ou "rapida" |
+
+Velocidade = meio-período do pulso no pino PUL (um passo = nível alto + nível baixo = 2 × valor):
+
+| speed | Meio-período | Passos/s aprox. |
+| --- | --- | --- |
+| lenta | 800 us | 625 |
+| normal | 400 us | 1250 (padrão do exemplo e do START) |
+| rapida | 200 us | 2500 |
+
+Semântica:
+
+- "direita" corresponde ao nível alto de DIR (sentido do primeiro giro do exemplo da bancada). O mapeamento para o sentido físico real é uma constante do firmware (DIR_DIREITA_NIVEL_ALTO).
+- Resultado de sucesso (stdout): "Movimento INICIADO: ...". Significa que o movimento foi iniciado, NÃO que terminou: a sessão fecha antes e o firmware não informa posição nem fim.
+- Argumento inválido: stdout vazio, stderr com o motivo, motor não se move.
+- O movimento continua após o Bye. PARE o interrompe; um novo START ou MOVER substitui o movimento em curso.
+- O limite de segurança de 60 s do firmware vale também para MOVER.
+- O Gateway nunca reenvia MOVER depois que o comando foi entregue (ver seção 5.1).
+
+### 3.5 Result (WebSocket)
+
+Direção: ESP → Gateway
+
+```
+{
+"type": "result",
+"command_id": "op-123-uuid",
+"stdout": "LED ligado",
+"stderr": ""
+}
+```
 
 | Campo | Tipo | Descrição |
-|---|---|---|
-| `type` | string | Sempre `"error"` |
-| `code` | string | Código do erro |
-| `message` | string | Descrição legível |
-| `session_id` | string | Sessão (opcional) |
+| --- | --- | --- |
+| type | string | Sempre "result" |
+| command_id | string | ID da operação |
+| stdout | string | Saída padrão |
+| stderr | string | Saída de erro (opcional) |
+
+### 3.6 Bye (WebSocket)
+
+Direção: ESP → Gateway
+
+```
+{
+"type": "bye",
+"session_id": "550e8400-e29b-41d4-a716-446655440000",
+"reason": "completed"
+}
+```
+
+| Campo | Tipo | Descrição |
+| --- | --- | --- |
+| type | string | Sempre "bye" |
+| session_id | string | SessionID |
+| reason | string | Motivo: "completed", "ack_timeout" ou "error" |
 
 ## 4. Timeouts
 
-| Etapa | Timeout | Ação |
-|---|---|---|
-| Wake → Hello | 10s | Retry ou falha |
-| Hello → Welcome | 5s | Fechar conexão |
-| Command → Result | 15s | Retry ou falha |
-| Sessão ociosa | 60s | Limpar sessão |
-| WebSocket geral | 30s | Fechar conexão |
+| Etapa | Timeout | Ação em caso de timeout |
+| --- | --- | --- |
+| WS Connection | 10 s | ESP volta para STANDBY |
+| Auth (Hello → Welcome) | 8 s (ESP) / 10 s (Gateway) | Controller tenta novamente com novo `session_id` |
+| Command (Welcome → Command) | 10 s | ESP volta para STANDBY |
+| Result (Command → Result) | 15 s (Gateway) | Controller retry (exceto comandos não idempotentes, ver 5.1) |
+| ACK (Result → Bye) | 5 s no Agente 03; 0,5 s no Agente 01 | ESP envia Bye e desconecta |
+| Session TTL | 60 s | Gateway remove sessão fantasma |
 
-## 5. Retry Policy
+## 5. Retry e Backoff
 
-- **Máximo de tentativas**: 5
-- **Backoff**: 1s, 2s, 4s, 8s, 16s (exponencial)
-- **Jitter**: ±20%
+O Gateway implementa backoff exponencial entre as tentativas da operação:
 
-## Direção: Gateway → ESP
-- `wake` (UDP) — acordar agente
-- `welcome` (WS) — autenticação OK
-- `command` (WS) — executar comando
-- `error` (WS) — erro de protocolo
+| Tentativa | Delay antes do Wake |
+| --- | --- |
+| 1 | 0 s (imediato) |
+| 2 | 1 s |
+| 3 | 2 s |
+| 4 | 4 s |
+| 5 | 8 s |
 
-## Direção: ESP → Gateway
-- `hello` (WS) — apresentação + auth
-- `result` (WS) — resultado de comando
-- `bye` (WS) — encerramento
-- `error` (WS) — erro de protocolo
+Após cinco tentativas, a operação é marcada como `failed`. (Valores conforme `internal/controller/controller.go`; a v4.0 do documento listava 4 tentativas com 0, 2, 4 e 8 s, o que não correspondia ao código.)
+
+Cada tentativa gera um `session_id` e um challenge novos. O firmware também mantém um cache curto de sessões já utilizadas para rejeitar repetições durante a operação.
+
+### 5.1 Comandos não idempotentes (V4.1)
+
+Falhas de Wake e de autenticação acontecem antes de o comando ser entregue e continuam sendo repetidas.
+
+Se o comando já foi entregue (evento command_sent) e o resultado não chega no prazo, o agente pode ter executado e só a resposta se perdeu. Para capabilities cujo efeito físico não pode ser repetido (hoje: MOVER), o Gateway NÃO reenvia: emite result_timeout seguido de operation_failed com reason result_unconfirmed_no_retry. Capabilities idempotentes (LED_ON, START, PARE, leituras) mantêm o comportamento de retry.
+
+A lista está em nonIdempotentCmds, em internal/controller/controller.go.
 
 ## 6. Segurança
 
 ### 6.1 HMAC-SHA256
 
-- `auth_mac` (no Wake) = `HMAC(secret, challenge \|\| agent_id)`
-- `challenge_response` (no Hello) = `HMAC(secret, challenge)`
-- Secret: 32 bytes, armazenada em base64 no Gateway e hex no ESP32
+Todas as autenticações usam HMAC-SHA256:
 
-### 6.2 Validações
+```text
+WakeMAC       = HMAC-SHA256(secret, challenge || agent_id)
+HelloResponse = HMAC-SHA256(secret, challenge)
+```
 
-1. Verificar `session_id` existe e não expirou
-2. Verificar `agent_id` corresponde à sessão
-3. Verificar HMAC com `hmac.Equal()` (timing-safe)
-4. Verificar timestamp dentro de janela aceitável (±30s)
+### 6.2 Secret
 
-## 7. Códigos de Erro
+- **Gateway:** Base64, 32 bytes ou mais, armazenada no Registry.
+- **ESP32:** hexadecimal direto, representando os mesmos bytes.
+- **Geração:** `openssl rand -base64 32`.
 
-| Código | Descrição |
-|---|---|
-| `AUTH_FAILED` | HMAC inválido |
-| `SESSION_EXPIRED` | Sessão expirou |
-| `SESSION_NOT_FOUND` | Sessão não existe |
-| `INVALID_MESSAGE` | JSON malformado |
-| `UNKNOWN_COMMAND` | Comando não suportado |
-| `TIMEOUT` | Operação excedeu timeout |
-| `AGENT_OFFLINE` | Agente não respondeu ao Wake |
+### 6.3 Prevenção de replay
+
+- `session_id` único por tentativa de conexão (UUID v4).
+- Challenge aleatório de 32 bytes.
+- Não há reutilização de `session_id` entre tentativas.
+- O ESP32 rejeita sessões presentes em seu cache curto de sessões utilizadas.
+
+## 7. Estados do Subagente
+
+```text
+STANDBY ──► CONNECTING ──► AUTHENTIC ──► COMMAND ──► ACK ──► DISCONNECTING ──► STANDBY
+
+Timeout em qualquer estado: retorno a STANDBY.
+```
+
+| Estado | Descrição |
+| --- | --- |
+| STANDBY | UDP ativo, WS fechado. Aguardando convocação. |
+| CONNECTING | UDP parado, WS abrindo. Enviando Hello. |
+| AUTHENTIC | WS aberto. Aguardando Welcome. |
+| COMMAND | Autenticado. Aguardando comando do Gateway. |
+| ACK | Comando executado. Aguardando confirmação. |
+| DISCONNECTING | Enviando Bye, fechando WS. |
+
+## 8. Códigos de Erro
+
+| Erro | Significado |
+| --- | --- |
+| agent_not_registered | AgentID não existe no Registry |
+| unknown_ip | LastIP vazio no Registry |
+| hmac_invalid | Wake MAC não corresponde |
+| session_not_found | ESP conectou sem convocação |
+| challenge_invalid | Challenge response incorreta |
+| auth_timeout | ESP não autenticou a tempo |
+| result_timeout | ESP não enviou resultado |
+| max_retries_exhausted | Todas as 5 tentativas falharam |
+| result_unconfirmed_no_retry | Comando não idempotente entregue, resultado não chegou, não reenviado (v4.1) |
+
+## 9. Changelog
+
+| Versão | Data | Mudanças |
+| --- | --- | --- |
+| v4.1 | 2026-10-24 | Campo opcional args em Command; capability MOVER; comandos não idempotentes não são reenviados; eventos SSE gerados com JSON. |
+| v4.0 | 2026-08-15 | Subagente Passivo + Pico de Conexão. Sem heartbeat e sem reconexão automática. |
+| v3.1 | 2026-08-10 | Agente autônomo com heartbeat e reconexão (obsoleto). |
+| v3.0 | 2026-08-05 | Primeira versão com ESP32 físico |
+| v2.0 | 2026-07-20 | Gateway + cliente Go em terminal |
+| v1.0 | 2026-07-07 | Conceito inicial, estrutura base |
