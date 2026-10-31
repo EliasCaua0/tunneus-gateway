@@ -1,0 +1,10 @@
+{
+  "agents": [
+    {
+      "id": "esp32-01",
+      "capabilities": ["LED", "STATUS"],
+      "secret": "ZWxhZ3JlLWV4ZW1wbG8tZGVtb25zdHJhY2FvLXR1bm5ldXMtMDE=",
+      "last_ip": "192.0.2.10"
+    }
+  ]
+}

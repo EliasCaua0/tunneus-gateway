@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="520" viewBox="0 0 1000 520" role="img" aria-labelledby="title desc">
+  <title id="title">Formas de onda do motor de passo</title>
+  <desc id="desc">Comparação dos períodos lento, normal e rápido e relação entre velocidade e duração estimada.</desc>
+  <rect width="1000" height="520" fill="#fbfcfe"/>
+  <style>
+    text { font-family: Arial, sans-serif; fill: #243247; }
+    .title { font-size: 25px; font-weight: 700; }
+    .label { font-size: 18px; font-weight: 700; }
+    .small { font-size: 15px; fill: #526075; }
+    .grid { stroke: #dce3ec; stroke-width: 1; }
+    .axis { stroke: #7b899d; stroke-width: 1.5; }
+    .wave { fill: none; stroke: #126a83; stroke-width: 4; stroke-linejoin: round; }
+  </style>
+  <text x="45" y="43" class="title">PUL: o meio-período determina a frequência dos passos</text>
+  <text x="45" y="69" class="small">Diagrama conceitual; a razão entre os meios-períodos é preservada.</text>
+
+  <g transform="translate(45,100)">
+    <text x="0" y="0" class="label">Lenta</text>
+    <text x="0" y="24" class="small">meio-período = 800 µs · ≈ 625 passos/s</text>
+    <line x1="0" y1="94" x2="900" y2="94" class="axis"/>
+    <line x1="0" y1="50" x2="900" y2="50" class="grid"/>
+    <path class="wave" d="M0 94 L0 50 L240 50 L240 94 L480 94 L480 50 L720 50 L720 94 L900 94"/>
+  </g>
+
+  <g transform="translate(45,225)">
+    <text x="0" y="0" class="label">Normal</text>
+    <text x="0" y="24" class="small">meio-período = 400 µs · ≈ 1.250 passos/s</text>
+    <line x1="0" y1="94" x2="900" y2="94" class="axis"/>
+    <line x1="0" y1="50" x2="900" y2="50" class="grid"/>
+    <path class="wave" d="M0 94 L0 50 L120 50 L120 94 L240 94 L240 50 L360 50 L360 94 L480 94 L480 50 L600 50 L600 94 L720 94 L720 50 L840 50 L840 94 L900 94"/>
+  </g>
+
+  <g transform="translate(45,350)">
+    <text x="0" y="0" class="label">Rápida</text>
+    <text x="0" y="24" class="small">meio-período = 200 µs · ≈ 2.500 passos/s</text>
+    <line x1="0" y1="94" x2="900" y2="94" class="axis"/>
+    <line x1="0" y1="50" x2="900" y2="50" class="grid"/>
+    <path class="wave" d="M0 94 L0 50 L60 50 L60 94 L120 94 L120 50 L180 50 L180 94 L240 94 L240 50 L300 50 L300 94 L360 94 L360 50 L420 50 L420 94 L480 94 L480 50 L540 50 L540 94 L600 94 L600 50 L660 50 L660 94 L720 94 L720 50 L780 50 L780 94 L840 94 L840 50 L900 50 L900 94"/>
+  </g>
+
+  <text x="45" y="490" class="small">f ≈ 1 / (2 × meio-período)   ·   t estimado = passos × 2 × meio-período</text>
+</svg>
