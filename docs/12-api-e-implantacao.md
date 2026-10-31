@@ -106,6 +106,7 @@ uma extensão controlada, não uma dependência para toda operação.
 6.  **Execução.** Compilar o ponto de entrada atual, iniciar o Gateway e
     abrir `http://IP_DO_GATEWAY:18080/dashboard/`.
 
+
     cd /raiz/do/repositorio
     go mod tidy
     go vet ./cmd/gateway ./internal/...
