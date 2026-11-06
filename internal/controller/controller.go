@@ -102,11 +102,16 @@ func (c *Controller) Submit(agentID, command string, args map[string]any) (*Oper
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
+	if err := registry.DefaultRegistry.TryReserveAgent(agentID, op.ID); err != nil {
+		return nil, err
+	}
 
 	c.mu.Lock()
 	c.operations[op.ID] = op
 	c.mu.Unlock()
+	submitted := *op
 
+	c.emitAgentState(agentID, registry.OperationInOperation, op.ID, op.ID)
 	created := map[string]any{"command": command}
 	if len(args) > 0 {
 		created["args"] = args
@@ -115,11 +120,16 @@ func (c *Controller) Submit(agentID, command string, args map[string]any) (*Oper
 
 	go c.execute(op)
 
-	return op, nil
+	return &submitted, nil
 }
 
 // execute é o fluxo completo de uma operação (com retry).
 func (c *Controller) execute(op *Operation) {
+	defer func() {
+		registry.DefaultRegistry.ReleaseAgent(op.AgentID, op.ID)
+		c.emitAgentState(op.AgentID, registry.OperationAvailable, op.ID, "")
+	}()
+
 	backoffs := []time.Duration{0, 1 * time.Second, 2 * time.Second, 4 *
 		time.Second, 8 * time.Second}
 	maxRetries := len(backoffs)
@@ -127,9 +137,7 @@ func (c *Controller) execute(op *Operation) {
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		sessionID := uuid.NewString()
 		challenge := generateChallenge()
-		op.SessionID = sessionID
-		op.Challenge = challenge
-		op.Retries = attempt
+		c.updateAttempt(op.ID, sessionID, challenge, attempt)
 
 		c.updateStatus(op.ID, "wake_sent")
 		c.emit("wake_sent", op, map[string]any{"attempt": attempt + 1})
@@ -191,7 +199,7 @@ func (c *Controller) execute(op *Operation) {
 			session.EphemeralStore.Remove(sess.ID)
 			if nonIdempotentCmds[op.Command] {
 				// O comando já foi entregue: não reenviar (ver nonIdempotentCmds).
-				op.Error = "comando entregue, mas o resultado não chegou; não reenviado por não ser idempotente"
+				c.updateError(op.ID, "comando entregue, mas o resultado não chegou; não reenviado por não ser idempotente")
 				c.updateStatus(op.ID, "failed")
 				c.emit("operation_failed", op, map[string]any{"reason": "result_unconfirmed_no_retry"})
 				return
@@ -200,11 +208,7 @@ func (c *Controller) execute(op *Operation) {
 		}
 
 		// Sucesso!
-		op.Result = result.Stdout
-		if result.Stderr != "" {
-			op.Error = result.Stderr
-		}
-		c.updateStatus(op.ID, "completed")
+		c.updateResult(op.ID, result.Stdout, result.Stderr)
 		c.emit("result_received", op, map[string]any{"stdout": result.Stdout, "stderr": result.Stderr})
 
 		// Atualiza Registry
@@ -228,7 +232,7 @@ func (c *Controller) GetOperation(id string) (*Operation, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	op, ok := c.operations[id]
-	return op, ok
+	return cloneOperation(op), ok
 }
 
 // ListOperations retorna todas as operações (mais recentes primeiro).
@@ -237,7 +241,7 @@ func (c *Controller) ListOperations() []*Operation {
 	defer c.mu.RUnlock()
 	list := make([]*Operation, 0, len(c.operations))
 	for _, op := range c.operations {
-		list = append(list, op)
+		list = append(list, cloneOperation(op))
 	}
 	// ordenar por created_at desc
 	for i := 0; i < len(list)-1; i++ {
@@ -258,6 +262,51 @@ func (c *Controller) updateStatus(opID, status string) {
 		op.Status = status
 		op.UpdatedAt = time.Now()
 	}
+}
+
+func (c *Controller) updateAttempt(opID, sessionID, challenge string, retries int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if op, ok := c.operations[opID]; ok {
+		op.SessionID = sessionID
+		op.Challenge = challenge
+		op.Retries = retries
+		op.UpdatedAt = time.Now()
+	}
+}
+
+func (c *Controller) updateResult(opID, result, operationError string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if op, ok := c.operations[opID]; ok {
+		op.Result = result
+		op.Error = operationError
+		op.Status = "completed"
+		op.UpdatedAt = time.Now()
+	}
+}
+
+func (c *Controller) updateError(opID, operationError string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if op, ok := c.operations[opID]; ok {
+		op.Error = operationError
+		op.UpdatedAt = time.Now()
+	}
+}
+
+func cloneOperation(op *Operation) *Operation {
+	if op == nil {
+		return nil
+	}
+	clone := *op
+	if op.Args != nil {
+		clone.Args = make(map[string]any, len(op.Args))
+		for key, value := range op.Args {
+			clone.Args[key] = value
+		}
+	}
+	return &clone
 }
 
 // SSE — Server-Sent Events
@@ -294,6 +343,24 @@ func (c *Controller) emit(event string, op *Operation, extra map[string]any) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		log.Printf("[Controller] Falha ao serializar evento SSE %s: %v", event, err)
+		return
+	}
+	c.broadcastSSE(string(data))
+}
+
+func (c *Controller) emitAgentState(agentID, state, opID, activeOpID string) {
+	payload := map[string]any{
+		"event":           "agent_state_changed",
+		"agent_id":        agentID,
+		"operation_state": state,
+		"op_id":           opID,
+	}
+	if activeOpID != "" {
+		payload["active_op_id"] = activeOpID
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("[Controller] Falha ao serializar estado do agente %s: %v", agentID, err)
 		return
 	}
 	c.broadcastSSE(string(data))

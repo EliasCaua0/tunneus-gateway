@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -14,14 +15,16 @@ import (
 
 // AgentResponse é a visão pública de um agente para o dashboard.
 type AgentResponse struct {
-	AgentID      string    `json:"agent_id"`
-	Name         string    `json:"name"`
-	Type         string    `json:"type"`
-	Icon         string    `json:"icon"`
-	Description  string    `json:"description"`
-	Capabilities []string  `json:"capabilities"`
-	Status       string    `json:"status"`
-	LastSeen     time.Time `json:"last_seen"`
+	AgentID        string    `json:"agent_id"`
+	Name           string    `json:"name"`
+	Type           string    `json:"type"`
+	Icon           string    `json:"icon"`
+	Description    string    `json:"description"`
+	Capabilities   []string  `json:"capabilities"`
+	Status         string    `json:"status"`
+	OperationState string    `json:"operation_state"`
+	ActiveOpID     string    `json:"active_op_id,omitempty"`
+	LastSeen       time.Time `json:"last_seen"`
 }
 
 // ListAgents retorna todos os agentes registrados com estado atual.
@@ -31,15 +34,22 @@ func ListAgents(w http.ResponseWriter, r *http.Request) {
 	entries := registry.DefaultRegistry.List()
 	var result []AgentResponse
 	for _, e := range entries {
+		operationState := registry.OperationAvailable
+		activeOpID, busy := registry.DefaultRegistry.ActiveOperation(e.AgentID)
+		if busy {
+			operationState = registry.OperationInOperation
+		}
 		result = append(result, AgentResponse{
-			AgentID:      e.AgentID,
-			Name:         e.Name,
-			Type:         e.Type,
-			Icon:         e.Icon,
-			Description:  e.Description,
-			Capabilities: e.Capabilities,
-			Status:       e.Status,
-			LastSeen:     e.LastSeen,
+			AgentID:        e.AgentID,
+			Name:           e.Name,
+			Type:           e.Type,
+			Icon:           e.Icon,
+			Description:    e.Description,
+			Capabilities:   e.Capabilities,
+			Status:         e.Status,
+			OperationState: operationState,
+			ActiveOpID:     activeOpID,
+			LastSeen:       e.LastSeen,
 		})
 	}
 
@@ -92,6 +102,19 @@ func SendAgentCommand(w http.ResponseWriter, r *http.Request) {
 	// Submete ao Controller (assíncrono)
 	op, err := controller.DefaultController.Submit(agentID, req.Cmd, req.Args)
 	if err != nil {
+		var busyErr *registry.AgentBusyError
+		if errors.As(err, &busyErr) {
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]any{
+				"success":         false,
+				"error":           "agent_busy",
+				"message":         "Agente ocupado: já existe uma operação ativa",
+				"agent_id":        busyErr.AgentID,
+				"active_op_id":    busyErr.ActiveOpID,
+				"operation_state": "in_operation",
+			})
+			return
+		}
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]any{"success": false, "message": err.Error()})
 		return
