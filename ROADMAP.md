@@ -63,7 +63,7 @@ A ordem e o momento de execução das melhorias serão definidos com base em jus
   - Status de múltiplos agentes simultâneos
   - Controles por agente (não apenas um)
 
-- [ ] **Métricas e telemetria**
+- [x] **Métricas e telemetria**
   - Tempo médio de resposta por agente
   - Taxa de sucesso/falha
   - RSSI do WiFi do ESP
