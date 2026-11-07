@@ -87,10 +87,11 @@ continua independente de Internet.
 
 O núcleo não foi limitado a um único dispositivo. Cada operação carrega
 um `agent_id`, e o Registry pode conter vários agentes com capabilities
-diferentes. O dashboard v5.1, por sua vez, é especializado no Agente 03
-e apresenta cinco grandezas e controles de movimento. Essa
-especialização da interface não reduz a capacidade multiagente do
-Gateway.
+diferentes. O dashboard, por sua vez, lista todos os agentes e permite operar
+vários painéis simultaneamente, com seleção e estado independentes por
+guia. As cinco grandezas e os controles de movimento aparecem quando as
+capabilities do Agente 03 estão registradas. Essa especialização da
+interface não reduz a capacidade multiagente do Gateway.
 
 O painel utiliza `esp32-03` por padrão e aceita o parâmetro
 `?agent=<id>`. Ele filtra os eventos pelo agente selecionado, mas não se

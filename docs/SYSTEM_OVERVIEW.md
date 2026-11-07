@@ -35,9 +35,9 @@ Esse modelo elimina heartbeats constantes, reconexões automáticas problemátic
 
 ## 3. Estado atual do projeto
 
-**Versão de referência:** protocolo Tunneus V4.1, dashboard v5.1 e firmwares V4.3-MARATHON e V4.4.
+**Versão de referência:** protocolo Tunneus V4.1, dashboard multiagente e firmwares V4.3-MARATHON e V4.4.
 
-O sistema possui uma base funcional estável (v1.0.0), demonstrada em operação com protótipos físicos. Não existem testes automatizados do Gateway (Go). O dashboard tem uma suíte própria em `tests/dashboard/` (Playwright contra um Gateway simulado, ver `docs/DASHBOARD_AGENTE03.md`). Não há CI nem linter configurados.
+O sistema possui uma base funcional estável (v1.0.0), demonstrada em operação com protótipos físicos. O Gateway tem testes unitários do Registry e testes de integração multiagente com Wake UDP, WebSocket, REST e SSE. O dashboard tem uma suíte própria em `tests/dashboard/` (Playwright contra um Gateway simulado, ver `docs/DASHBOARD_AGENTE03.md`). Não há CI nem linter configurados.
 
 ### Fase de desenvolvimento
 
@@ -135,17 +135,20 @@ O coração do sistema. Gerencia o ciclo de vida completo de uma operação:
 
 1. Recebe a intenção do usuário via `Submit(agentID, command, args)` (`args` opcional, protocolo v4.1).
 2. Valida agente e capability no Registry.
-3. Cria uma `Operation` com UUID.
-4. Executa em background (goroutine) com retry e backoff exponencial.
+3. Cria uma `Operation` com UUID e reserva atomicamente o agente para essa operação.
+4. Executa em background (goroutine) com retry e backoff exponencial. Agentes diferentes executam em paralelo; uma nova operação para o mesmo agente é recusada enquanto a reserva existir.
 5. Para cada tentativa: gera novo sessionID + challenge, envia Wake, cria sessão efêmera, aguarda autenticação (canal `authCh`), envia comando, aguarda resultado (canal `resultCh`).
 6. Faz broadcast de eventos SSE para clientes conectados.
-7. Limpa operações antigas a cada 5 minutos (>30 min).
+7. Libera a reserva ao concluir ou falhar e publica o agente como disponível.
+8. Limpa operações antigas a cada 5 minutos (>30 min).
+
+As escritas de `Operation` são protegidas pelo mutex do Controller. `GetOperation()` e `ListOperations()` devolvem snapshots, incluindo cópia de `Args`, para que consumidores não compartilhem estruturas mutáveis com a execução.
 
 **Retry com backoff:** 5 tentativas com delays de 0s, 1s, 2s, 4s, 8s.
 
 **Sem reenvio após a entrega (v4.1):** capabilities de efeito físico não idempotente (`nonIdempotentCmds`, hoje `MOVER`) não são reenviadas depois de `command_sent`. Se o resultado não chega, a operação termina com `operation_failed` / `result_unconfirmed_no_retry`. Falhas de Wake e de autenticação continuam sendo repetidas.
 
-**Eventos SSE:** montados por `emit()` com `json.Marshal`. Eventos emitidos: `command_created` (com `args`, se houver), `wake_sent`, `wake_failed`, `auth_timeout`, `auth_ok`, `command_send_failed`, `command_sent`, `result_timeout`, `result_received` (`stdout`, `stderr`), `operation_failed` (`reason`). Todos carregam `op_id` e `agent_id`.
+**Eventos SSE:** montados por `emit()` com `json.Marshal`. Eventos emitidos: `command_created` (com `args`, se houver), `wake_sent`, `wake_failed`, `auth_timeout`, `auth_ok`, `command_send_failed`, `command_sent`, `result_timeout`, `result_received` (`stdout`, `stderr`), `operation_failed` (`reason`). Todos carregam `op_id` e `agent_id`. O evento `agent_state_changed` informa `operation_state`, `op_id` e, enquanto ocupado, `active_op_id`.
 
 ### 5.3 Registry (`internal/registry/registry.go`)
 
@@ -153,11 +156,15 @@ Cadastro persistente de subagentes conhecidos. Armazena em memória (map) e pers
 
 Cada entrada contém: `agent_id`, `secret` (base64), `last_ip`, `mac`, `capabilities`, `last_seen`, `status`, `firmware_ver`, `name`, `type`, `icon`, `description`.
 
+O mapa transitório `activeOperations` associa `agent_id` ao `op_id` que detém a reserva. `TryReserveAgent()` garante uma operação por agente, `ReleaseAgent()` só libera a reserva do proprietário e `ActiveOperation()` alimenta a visão pública. Essas reservas não são persistidas.
+
+`Get()`, `Set()` e `List()` usam cópias das entradas, incluindo o slice de capabilities. `Save()` serializa um snapshot e grava por arquivo temporário seguido de rename, evitando exposição de escrita parcial.
+
 Funções importantes:
 
 - `ComputeMAC()` — calcula HMAC-SHA256(challenge + agent_id, secret) para Wake Packets.
 - `ValidateChallengeResponse()` — valida HMAC-SHA256(challenge, secret) do Hello.
-- `InitRegistry()` — carrega de arquivo e sobrescreve esp32-01/esp32-02 com valores hardcoded (ver seção de limitações).
+- `InitRegistry()` — carrega de arquivo e sobrescreve esp32-01, esp32-02 e esp32-03 com valores hardcoded (ver seção de limitações).
 
 **Direção arquitetural confirmada:** o Registry deve evoluir para estado operacional puro — carregar de `registry.json` se existir, criar vazio se não existir, sem hardcoding.
 
@@ -194,23 +201,26 @@ Endpoints REST:
 
 | Rota | Método | Função |
 |:---|:---|:---|
-| `/api/agents` | GET | Lista todos os agentes registrados (visão pública, sem secret) |
-| `/api/agents/{id}/command` | POST | Submete um comando `{"cmd":"...","args":{...}}` (`args` opcional; HTTP 202 Accepted, processamento assíncrono; HTTP 400 se `args` violar os limites) |
+| `/api/agents` | GET | Lista todos os agentes registrados (visão pública, sem secret), incluindo `operation_state` e `active_op_id` |
+| `/api/agents/{id}/command` | POST | Submete `{"cmd":"...","args":{...}}` (`args` opcional); HTTP 202 ao aceitar, HTTP 400 para entrada inválida e HTTP 409 com `error: agent_busy` se o agente já tiver operação ativa |
 | `/api/operations/{id}` | GET | Consulta o estado de uma operação. Resposta: `{"success":true,"operation":{"status":...}}` |
-| `/api/events` | GET | Server-Sent Events (stream de eventos em tempo real) |
+| `/api/events` | GET | Server-Sent Events (stream de eventos em tempo real), incluindo `agent_state_changed` |
 
 A API não possui autenticação ou autorização.
 
 ### 5.8 Dashboard (`web/dashboard/index.html`)
 
-SPA em um único arquivo HTML com CSS e JavaScript inline, sem bibliotecas nem CDN (ADR-008). Dashboard v5.1, dedicado à bancada do Agente 03 (ver `docs/DASHBOARD_AGENTE03.md` e ADR-014). Funcionalidades:
+SPA em um único arquivo HTML com CSS e JavaScript inline, sem bibliotecas nem CDN (ADR-008). Dashboard multiagente (ver `docs/DASHBOARD_AGENTE03.md` e ADR-016). Funcionalidades:
 
-- Painel de um agente (`esp32-03` por padrão; `?agent=<id>` aponta para outro agente do Registry). Não há seletor.
-- Visão geral: estado do agente, pontos de atenção, última leitura de cada grandeza e contadores.
+- Lista de todos os agentes e seleção de múltiplos painéis; `?agent=<id>` define a seleção inicial e `esp32-03` é o padrão.
+- Seleção, operações, logs e gráficos independentes por guia, somente em memória.
+- Execução simultânea em agentes diferentes e bloqueio dos comandos de um agente enquanto `operation_state=in_operation`, inclusive `PARE`.
+- HTTP 409 apresentado como recusa explícita, com retry manual somente após a liberação do agente.
 - Timeline do Pico de Conexão (STANDBY → WAKE → AUTH → CMD → RESULT), marcada só quando o evento SSE chega.
+- Resultados roteados por `agent_id` e `op_id`, sem compartilhamento entre painéis.
 - Bancada: gráficos de temperatura, pressão, altitude, corrente e distância (leitura sob demanda, histórico em memória) e acionamentos do motor (START, PARE e movimento programado com direção, passos e velocidade).
-- Controles ativados a partir das capabilities do Registry.
-- Operações e eventos desta sessão; polling de `/api/agents` a cada 3 segundos como complemento ao SSE.
+- Controles ativados pelas capabilities do Registry.
+- Polling de `/api/agents` a cada 3 segundos como complemento ao SSE.
 
 ### 5.9 Protocol (`internal/protocol/`)
 
@@ -338,8 +348,9 @@ tunneus-gateway/
 │   ├── esp32_agent.ino.ino        # Agente 01 — LED
 │   ├── agente03/agente03.ino      # Agente 03 — sensores e motor
 │   └── README.md                  # Configuração dos firmwares
-├── web/dashboard/index.html       # Dashboard SPA v5.1
+├── web/dashboard/index.html       # Dashboard SPA multiagente
 ├── tests/dashboard/               # Mock Gateway e testes com Playwright
+├── tests/integration/             # Integração multiagente (UDP, WS, REST, SSE)
 ├── docs/                          # Trilha progressiva e documentos de referência
 ├── configs/registry.example.json  # Configuração exclusivamente demonstrativa
 ├── go.mod / go.sum                # Dependências Go
@@ -373,7 +384,7 @@ O arquivo `registry.json` é local e não é versionado. O repositório contém 
 - **Tipo:** `sensor`
 - **Capabilities:** `LER_SENSORES`, `TEMPERATURA`, `PRESSAO`, `ALTITUDE`, `CORRENTE`, `DISTANCIA`, `START`, `PARE`, `MOVER`
 - **Firmware:** commitado (`agents/esp32/agente03/agente03.ino`, v4.4)
-- **Dashboard:** `web/dashboard/index.html` (v5.1) é dedicado a este agente
+- **Dashboard:** o painel multiagente apresenta gráficos de sensores e controles do motor quando essas capabilities estão registradas
 - **Status:** aplicação experimental em desenvolvimento ativo. Seu `last_ip` precisa ser preenchido no `registry.json` (IP exibido no Serial Monitor do ESP) para o Wake funcionar.
 
 ---

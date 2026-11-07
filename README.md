@@ -2,7 +2,7 @@
 
 Sistema de comunicação e automação **semi-offline** que conecta um dashboard, um Gateway em Go e agentes ESP32 por meio de operações assíncronas e sessões temporárias autenticadas.
 
-**Protocolo Tunneus V4.1 · Dashboard v5.1 · Ecossistema ArcanLab**
+**Protocolo Tunneus V4.1 · Dashboard multiagente · Ecossistema ArcanLab**
 
 > **Finalidade deste repositório:** apresentação técnica do projeto a professores, avaliadores e colaboradores autorizados. O conteúdo é disponibilizado para leitura, avaliação acadêmica e acompanhamento do desenvolvimento. Este repositório não constitui uma distribuição de código aberto; os direitos são reservados e uma eventual licença de distribuição ainda será definida.
 
@@ -37,12 +37,15 @@ O **Agente 03** é uma das aplicações dessa evolução: uma bancada com sensor
 ## O que está implementado
 
 - Gateway multiagente em Go, com API REST e eventos SSE.
+- Operações simultâneas em agentes diferentes, com reserva atômica de no máximo uma operação ativa por agente.
+- Recusa de submissão concorrente com HTTP 409 (`error: agent_busy`, `active_op_id`, `operation_state`), sem novo Wake nem operação adicional.
+- Estado operacional em tempo real via REST (`GET /api/agents`) e SSE (evento `agent_state_changed`).
 - Operações assíncronas com HTTP 202 e identificação por `op_id`.
 - Convocação UDP e sessões WebSocket efêmeras.
 - Autenticação por desafio com HMAC-SHA256.
 - Registry de agentes, capabilities e endereços.
 - Firmware para LED, sensores e motor de passo.
-- Dashboard SPA sem bibliotecas externas, com gráficos SVG.
+- Dashboard SPA multiagente, sem bibliotecas externas, com gráficos SVG; painéis simultâneos com seleção, histórico e gráficos independentes por guia, somente em memória.
 - Operação local e acesso remoto privado via Tailscale, este último em aprimoramento.
 - Mock Gateway e verificação da interface com Playwright.
 
@@ -109,14 +112,39 @@ curl -X POST http://localhost:18080/api/agents/esp32-03/command \
 
 A resposta HTTP 202 confirma o aceite da intenção, não a conclusão da leitura. O desfecho pode ser acompanhado por `/api/events` ou consultado em `/api/operations/{op_id}`.
 
+Se o agente já possuir uma operação ativa, a submissão é recusada com **HTTP 409**, sem criar operação e sem enviar outro Wake:
+
+```json
+{
+  "success": false,
+  "error": "agent_busy",
+  "message": "Agente ocupado: já existe uma operação ativa",
+  "agent_id": "esp32-03",
+  "active_op_id": "op-id-da-operacao-ativa",
+  "operation_state": "in_operation"
+}
+```
+
+`GET /api/agents` informa `operation_state` (`available`/`in_operation`) e `active_op_id` para cada agente. O retry após o 409 é manual e somente é oferecido quando o agente volta a ficar disponível; o evento SSE `agent_state_changed` publica essas transições em tempo real.
+
+Validação automatizada:
+
+```bash
+go test -race ./internal/registry ./internal/controller ./internal/api ./tests/integration
+go vet ./cmd/gateway ./internal/... ./tests/integration
+go build -o tunneus-gateway ./cmd/gateway
+python3 tests/dashboard/test_dashboard.py   # Playwright/Chromium contra o mock, sem hardware
+```
+
 ## Estrutura do repositório
 
 ```text
 cmd/gateway/          ponto de entrada do Gateway
 internal/             Controller, API, Registry, sessões e transportes
 agents/esp32/         firmwares e instruções
-web/dashboard/        dashboard v5.1
-tests/dashboard/      mock e verificação com Playwright
+web/dashboard/        dashboard SPA multiagente
+tests/dashboard/      mock e verificação da interface com Playwright
+tests/integration/  integração multiagente (Wake UDP, WebSocket, REST e SSE)
 docs/                 apresentação e documentação técnica progressiva
 configs/              exemplos demonstrativos de configuração
 ```

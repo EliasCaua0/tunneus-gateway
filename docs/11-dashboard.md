@@ -9,7 +9,7 @@
 
 ## 11.1 Uma SPA sem dependências externas
 
-O dashboard v5.1 é uma Single Page Application em um único arquivo HTML
+O dashboard multiagente é uma Single Page Application em um único arquivo HTML
 com CSS e JavaScript inline. Não utiliza bibliotecas nem CDN, escolha
 compatível com o funcionamento em rede local. Os gráficos SVG são
 construídos por funções próprias, e a renderização incremental usa flags

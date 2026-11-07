@@ -20,7 +20,7 @@ decisões, protocolo e núcleo, firmware, interface e verificação.
     │   ├── wake/                    socket UDP
     │   └── websocket/               upgrade, autenticação e recepção
     ├── agents/esp32/                firmwares e instruções
-    ├── web/dashboard/               SPA v5.1
+    ├── web/dashboard/               SPA multiagente
     ├── tests/dashboard/             mock e testes Playwright
     └── docs/                        visão, ADRs, dashboard e glossário
 
@@ -67,7 +67,7 @@ decisões, protocolo e núcleo, firmware, interface e verificação.
     operacional.
 -   ARCANLAB. **Decisões Arquiteturais**. Registros ADR do projeto.
 -   ARCANLAB. **Dashboard Agente 03**. Contratos e comportamento da
-    interface v5.1.
+    interface multiagente.
 ---
 
 [Voltar ao índice da documentação](README.md)

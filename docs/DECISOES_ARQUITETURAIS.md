@@ -301,6 +301,8 @@ O retry do Controller assume idempotência. Para `MOVER` isso é falso: se o res
 
 # ADR-014 — Dashboard dedicado ao Agente 03, Gateway multiagente
 
+> **Status: substituído pelo ADR-016.** O dashboard passou a listar todos os agentes e a manter painéis independentes. O texto abaixo permanece como registro histórico.
+
 ## Decisão
 
 O dashboard (`web/dashboard/index.html`) atende a bancada do Agente 03 (`esp32-03`), sem lista nem seletor de agentes. O Gateway, o Registry, a API, o SSE e o protocolo continuam multiagente, e o dashboard aceita `?agent=<id>` para apontar para outro agente do Registry.
@@ -314,6 +316,49 @@ O foco atual de desenvolvimento é a bancada de sensores e o motor de passo. Uma
 - Um painel multiagente genérico é trabalho futuro e não deve exigir mudanças no Gateway.
 - Eventos SSE de outros agentes são ignorados pelo painel.
 - Capabilities do Registry sem controle no painel não ganham botão.
+
+---
+
+# ADR-015 — Exclusão mútua por agente e paralelismo entre agentes
+
+## Decisão
+
+Cada agente pode ter no máximo uma operação ativa, reservada atomicamente no Registry antes de a operação ser aceita. A reserva pertence ao `op_id` e só pode ser liberada por ele. Agentes diferentes podem executar operações simultaneamente.
+
+O estado operacional é exposto separadamente do estado de conectividade: `operation_state` assume `available` ou `in_operation`, com `active_op_id` quando ocupado. Mudanças são publicadas por `agent_state_changed` via SSE. Uma submissão concorrente para o mesmo agente é recusada imediatamente com HTTP 409, sem criar operação nem enviar outro Wake.
+
+## Motivação
+
+O Gateway já executava cada operação em uma goroutine, mas não impedia duas operações de disputarem o mesmo dispositivo. Serializar todo o Gateway evitaria a disputa ao custo de bloquear agentes sem relação entre si. A reserva por agente preserva o paralelismo e torna explícita a restrição física de cada dispositivo.
+
+## Consequências
+
+- A reserva é transitória e não é persistida em `registry.json`.
+- Todo encerramento de operação, inclusive falha ou esgotamento de retries, deve liberar a reserva.
+- `PARE` também é recusado enquanto o agente estiver ocupado; não existe canal prioritário paralelo.
+- O retry após HTTP 409 é manual e somente pode ocorrer quando o agente estiver disponível.
+- A consulta pública de operações e entradas do Registry usa cópias para não expor estruturas mutáveis entre goroutines.
+
+---
+
+# ADR-016 — Dashboard multiagente com estado isolado por guia
+
+## Decisão
+
+O dashboard lista todos os agentes registrados e permite selecionar vários simultaneamente. Cada guia mantém em memória sua própria seleção, operações, logs e amostras, sem armazenamento compartilhado. Eventos são roteados por `agent_id` e `op_id`.
+
+Os controles específicos de sensores e motor continuam condicionados às capabilities, enquanto comandos genéricos conhecidos podem ser apresentados para os demais agentes.
+
+## Motivação
+
+Operar protótipos simultaneamente exige observar cada operação sem misturar resultados nem permitir que a seleção de uma guia altere outra. O estado operacional em tempo real também precisa bloquear comandos do agente ocupado antes do POST, mantendo o HTTP 409 do Gateway como proteção definitiva contra concorrência entre clientes.
+
+## Consequências
+
+- Recarregar a página descarta o histórico local daquela guia.
+- O SSE continua compartilhado pelo Gateway, mas eventos de agentes não selecionados não criam painéis nem operações visíveis na guia.
+- O polling de `/api/agents` permanece apenas como sincronização complementar; resultados e mudanças de ocupação chegam por SSE.
+- Testes de interface devem cobrir duas guias, agentes concorrentes, HTTP 409, retry manual, isolamento de Result e layout móvel.
 
 ---
 

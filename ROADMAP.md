@@ -71,7 +71,8 @@ A ordem e o momento de execução das melhorias serão definidos com base em jus
 ### Refatorações
 
 - [ ] Extrair configuração para arquivo YAML/ENV
-- [ ] Adicionar testes unitários (Go)
+- [x] Testes unitários do Registry e testes de integração multiagente (Wake UDP, WebSocket, REST e SSE)
+- [ ] Ampliar cobertura dos testes Go para retries e demais fluxos do Controller
 - [ ] Documentação de API OpenAPI/Swagger
 
 ---

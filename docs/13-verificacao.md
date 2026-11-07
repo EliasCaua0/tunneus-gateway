@@ -36,7 +36,7 @@ sensores ou motor.
 
 ```mermaid
 flowchart LR
- T[Playwright e Chromium] -->|cliques e teclado| D[Dashboard real v5.1]
+ T[Playwright e Chromium] -->|cliques e teclado| D[Dashboard real]
  D -->|HTTP GET e POST| M[Mock Gateway em Python]
  M -->|SSE e resultados sinteticos| D
  T -->|leitura do DOM e asserts| V[Verificacoes funcionais]

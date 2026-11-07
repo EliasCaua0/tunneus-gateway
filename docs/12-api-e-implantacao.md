@@ -19,11 +19,11 @@ comandos e consultar operações; o SSE distribui os marcos; a rota `/ws`
 |---------------------------------|--------------------------|-------------------------------------------------------------|
 | `GET /`                         | Texto simples.           | Retorna “Tunneus Gateway Online”.                           |
 | `GET /health`                   | JSON.                    | Informa processo online e versão.                           |
-| `GET /api/agents`               | 200, lista JSON.         | Apresenta a visão pública dos agentes, sem secret e sem IP. |
-| `POST /api/agents/{id}/command` | 202 ou erro de contrato. | Valida e cria uma operação assíncrona.                      |
+| `GET /api/agents`               | 200, lista JSON.         | Apresenta a visão pública dos agentes (sem secret e sem IP), incluindo `operation_state` e `active_op_id`. |
+| `POST /api/agents/{id}/command` | 202, 400 ou 409.         | Valida e cria uma operação assíncrona; 409 com `error: agent_busy` se o agente já tiver operação ativa. |
 | `GET /api/operations/{id}`      | 200 ou 404.              | Consulta o estado da operação.                              |
 | `GET /api/events`               | `text/event-stream`.     | Publica os eventos para clientes conectados.                |
-| `GET /dashboard/`               | Arquivos estáticos.      | Serve o dashboard v5.1.                                     |
+| `GET /dashboard/`               | Arquivos estáticos.      | Serve o dashboard multiagente.                              |
 | `/ws`                           | Upgrade WebSocket.       | Recebe Hello e demais mensagens do agente.                  |
 
 ### Exemplo de submissão
