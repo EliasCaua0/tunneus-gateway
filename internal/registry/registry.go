@@ -233,16 +233,17 @@ var DefaultRegistry *Registry
 func InitRegistry() {
 	DefaultRegistry = NewRegistry("registry.json")
 
-	// Agente 01 — LED
+	// Agente 01 — Semáforo de LEDs (firmware v1.0, 3 LEDs com args {cor})
 	DefaultRegistry.Set(&Entry{
 		AgentID:      "esp32-01",
-		Secret:       "dGVzdC1zZWNyZXQtZm9yLWVzcDMyLTAxLWFyY2FuLmxhYg==",
-		Capabilities: []string{"LED_ON", "LED_OFF"},
+		Secret:       "dGVzdC1zZWNyZXQtZm9yLWVzcDMyLTA0LWFyY2FuLmxhYg==",
+		Capabilities: []string{"LIGAR_LED", "DESLIGAR_LED", "ESTADO_LEDS"},
 		Status:       "standby",
-		Name:         "Protótipo LED 01",
+		Name:         "Agente 01 — Semáforo de LEDs",
 		Type:         "led",
-		Icon:         "💡",
-		Description:  "Subagente ESP32 — Controle de LED onboard",
+		LastIP:       "192.168.18.100",
+		FirmwareVer:  "1.0",
+		Description:  "Controle de 3 LEDs (vermelho GPIO13, amarelo GPIO26, verde GPIO25) com args {cor}",
 	})
 
 	// Agente 02 — Polias Industriais
