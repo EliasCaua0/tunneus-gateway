@@ -3,375 +3,1223 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ArcanLab — Tunneus · Multiagente</title>
+<title>ArcanLab — Tunneus Gateway</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/favicon-180.png">
 <style>
 :root {
-  --bg:#0b0b0e; --surface:#121216; --raised:#191920; --hover:#22222c;
-  --border:#2b2b35; --text:#e7e7eb; --dim:#a5a5b0; --faint:#7e7e8a;
-  --accent:#8b5cf6; --accent-light:#b39afd; --ok:#34d399; --warn:#f5a524;
-  --err:#f87171; --info:#7aa7e8; --mono:ui-monospace,'Cascadia Mono',Consolas,monospace;
-  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --bg: #0b0b0e;
+  --surface: #121216;
+  --elevated: #18181e;
+  --hover: #20202a;
+  --border: #26262f;
+  --border-strong: #34343f;
+  --text: #e6e6ea;
+  --text-dim: #a3a3ae;
+  --text-faint: #80808c;
+  --accent: #7c3aed;
+  --accent-dim: #6d28d9;
+  --accent-light: #a78bfa;
+  --ok: #34d399;
+  --warn: #f5a524;
+  --err: #f87171;
+  --info: #7aa7e8;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Fira Code', Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 }
-* { box-sizing:border-box; margin:0; padding:0; }
-body { background:var(--bg); color:var(--text); font:14px/1.5 var(--sans); }
-button,input,select { font:inherit; }
-button:focus-visible,input:focus-visible,select:focus-visible { outline:2px solid var(--accent-light); outline-offset:2px; }
-.mono { font-family:var(--mono); } .dim { color:var(--dim); } .faint { color:var(--faint); }
-.small { font-size:12px; } .tiny { font-size:11px; } .hidden { display:none!important; }
-.app { min-height:100vh; display:grid; grid-template-columns:280px minmax(0,1fr); grid-template-rows:54px 1fr; }
-.header { grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:0 18px; background:var(--surface); border-bottom:1px solid var(--border); }
-.brand { font-weight:650; } .brand small { display:block; color:var(--faint); font-weight:400; }
-.connections { display:flex; gap:16px; color:var(--dim); font-size:12px; }
-.dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--faint); margin-right:6px; }
-.dot.ok { background:var(--ok); } .dot.err { background:var(--err); } .dot.warn { background:var(--warn); }
-.sidebar { background:var(--surface); border-right:1px solid var(--border); padding:16px 12px; }
-.sidebar h2 { font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--faint); padding:0 8px 10px; }
-.sidebar-note { color:var(--faint); font-size:11px; padding:0 8px 14px; }
-.agent-list { display:flex; flex-direction:column; gap:6px; }
-.agent-choice { display:grid; grid-template-columns:20px minmax(0,1fr); gap:8px; align-items:start; padding:10px 8px; border:1px solid transparent; border-radius:6px; cursor:pointer; }
-.agent-choice:hover { background:var(--hover); } .agent-choice.selected { background:var(--raised); border-color:var(--border); }
-.agent-choice input { margin-top:4px; accent-color:var(--accent); }
-.agent-choice-name { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
-.agent-choice-id { font:10px var(--mono); color:var(--faint); }
-.agent-choice .chip { margin-top:5px; }
-.main { padding:18px; min-width:0; }
-.main-head { display:flex; justify-content:space-between; align-items:end; gap:12px; margin-bottom:14px; }
-.main-head h1 { font-size:20px; } .main-head p { color:var(--faint); font-size:12px; }
-.panels { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr)); gap:16px; align-items:start; }
-.agent-panel { background:var(--surface); border:1px solid var(--border); border-radius:8px; min-width:0; overflow:hidden; }
-.agent-panel.busy { border-color:rgba(245,165,36,.65); }
-.panel-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:14px; border-bottom:1px solid var(--border); }
-.panel-title { font-size:15px; font-weight:600; } .panel-id { font:11px var(--mono); color:var(--faint); }
-.panel-body { padding:14px; display:flex; flex-direction:column; gap:14px; }
-.chip { display:inline-flex; align-items:center; width:max-content; padding:2px 8px; border:1px solid var(--border); border-radius:4px; color:var(--dim); font-size:10px; font-weight:650; text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }
-.chip.ok { color:var(--ok); border-color:rgba(52,211,153,.45); } .chip.warn { color:var(--warn); border-color:rgba(245,165,36,.5); }
-.chip.err { color:var(--err); border-color:rgba(248,113,113,.5); } .chip.info { color:var(--info); }
-.feedback { padding:9px 11px; border-left:3px solid var(--border); background:var(--raised); color:var(--dim); min-height:40px; }
-.feedback.running { border-color:var(--accent-light); color:var(--text); } .feedback.ok { border-color:var(--ok); }
-.feedback.err { border-color:var(--err); } .feedback.warn { border-color:var(--warn); }
-.feedback-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.btn { color:var(--text); background:var(--raised); border:1px solid var(--border); border-radius:4px; padding:7px 11px; min-height:34px; cursor:pointer; }
-.btn:hover:not(:disabled) { background:var(--hover); border-color:var(--accent); } .btn:disabled { opacity:.4; cursor:not-allowed; }
-.btn.primary { background:var(--accent); border-color:var(--accent); color:white; } .btn.danger { color:var(--err); border-color:rgba(248,113,113,.55); }
-.btn.sm { min-height:27px; padding:3px 9px; font-size:12px; } .btn.armed { background:var(--warn); color:#1a1205; }
-.commands { display:flex; flex-wrap:wrap; gap:8px; }
-.section-title { color:var(--faint); font-size:10px; text-transform:uppercase; letter-spacing:.08em; margin-bottom:7px; }
-.timeline { display:flex; padding:5px 0; }
-.phase { flex:1; text-align:center; position:relative; color:var(--faint); font-size:9px; text-transform:uppercase; }
-.phase:before { content:''; position:absolute; height:2px; top:6px; left:-50%; right:50%; background:var(--border); }
-.phase:first-child:before { display:none; } .phase-dot { position:relative; z-index:1; display:block; margin:0 auto 5px; width:14px; height:14px; border:2px solid var(--border); border-radius:50%; background:var(--surface); }
-.phase.on .phase-dot { border-color:var(--accent-light); background:var(--accent); } .phase.done .phase-dot { border-color:var(--ok); background:var(--ok); }
-.phase.fail .phase-dot { border-color:var(--err); background:var(--err); } .phase.done { color:var(--ok); } .phase.on { color:var(--accent-light); } .phase.fail { color:var(--err); }
-.result { font:12px var(--mono); overflow-wrap:anywhere; padding:9px; background:var(--bg); border-radius:4px; min-height:38px; color:var(--dim); }
-.kv { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
-.kv-item { min-width:0; } .kv-label { display:block; color:var(--faint); font-size:9px; text-transform:uppercase; } .kv-value { display:block; font:11px var(--mono); overflow-wrap:anywhere; }
-.charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:9px; }
-.chart-card { background:var(--raised); border:1px solid var(--border); border-radius:5px; padding:9px; min-width:0; }
-.chart-head { display:flex; justify-content:space-between; align-items:start; gap:5px; } .chart-name { font-size:12px; font-weight:600; }
-.chart-value { font:22px var(--mono); margin-top:3px; } .chart-unit { font-size:11px; color:var(--dim); }
-.chart-meta { min-height:17px; color:var(--faint); font-size:10px; } .chart-plot { height:110px; } .chart-plot svg { width:100%; height:110px; display:block; }
-svg .axis { stroke:var(--border); } svg .line { fill:none; stroke:var(--accent-light); stroke-width:1.7; } svg .point { fill:var(--accent-light); }
-svg .tick { fill:var(--faint); font:9px var(--mono); } svg .bad { stroke:var(--err); }
-.motor { border:1px solid var(--border); border-radius:5px; padding:11px; }
-.motor-controls { display:flex; flex-wrap:wrap; gap:8px; align-items:end; }
-.field { display:flex; flex-direction:column; gap:3px; } .field label { color:var(--faint); font-size:10px; text-transform:uppercase; }
-.input { width:110px; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:6px; }
-.motor-note { color:var(--faint); font-size:11px; margin-top:8px; }
-details { border-top:1px solid var(--border); padding-top:9px; } summary { cursor:pointer; color:var(--dim); font-size:12px; }
-.table-wrap { overflow-x:auto; } table { width:100%; border-collapse:collapse; font-size:11px; margin-top:8px; }
-th { color:var(--faint); text-align:left; font-weight:500; padding:5px; border-bottom:1px solid var(--border); } td { padding:5px; border-bottom:1px solid var(--border); vertical-align:top; }
-.log { max-height:180px; overflow:auto; margin-top:8px; font:10px var(--mono); color:var(--dim); } .log div { padding:3px 0; overflow-wrap:anywhere; }
-.empty { padding:30px; text-align:center; color:var(--faint); border:1px dashed var(--border); border-radius:6px; }
-@media(max-width:800px) { .app { grid-template-columns:minmax(0,1fr); grid-template-rows:54px auto 1fr; } .sidebar { min-width:0; overflow:hidden; border-right:0; border-bottom:1px solid var(--border); } .agent-list { flex-direction:row; max-width:100%; overflow-x:auto; } .agent-choice { flex:0 0 210px; } .main { padding:11px; } .connections { flex-direction:column; gap:0; } .panels { grid-template-columns:minmax(0,1fr); } }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { font-family: var(--font-sans); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+button, input, select { font: inherit; }
+.mono { font-family: var(--font-mono); }
+:focus-visible { outline: 2px solid var(--accent-light); outline-offset: 2px; }
+.skip { position: absolute; left: -999px; top: 0; background: var(--accent); color: #fff; padding: 8px 12px; z-index: 999; }
+.skip:focus { left: 8px; top: 8px; }
+.dim { color: var(--text-dim); } .faint { color: var(--text-faint); }
+.small { font-size: 12px; } .tiny { font-size: 11px; }
+.hidden { display: none !important; }
+
+/* ---------- layout ---------- */
+.app {
+  display: grid;
+  grid-template-rows: 48px minmax(0, 1fr) 28px;
+  grid-template-columns: 272px minmax(0, 1fr);
+  grid-template-areas: "header header" "rail main" "footer footer";
+  height: 100vh; height: 100dvh;
+}
+.header { grid-area: header; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; }
+.brand > div:last-child { min-width: 0; }
+.brand-logo { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; }
+.brand-name { font-size: 13px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand-sub { font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.header-status { display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
+.hs-item { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); flex-shrink: 0; display: inline-block; }
+.dot.ok { background: var(--ok); } .dot.err { background: var(--err); } .dot.warn { background: var(--warn); }
+.dot.info { background: var(--info); } .dot.act { background: var(--accent-light); } .dot.muted { background: var(--text-faint); }
+.state-line { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.state-line.muted { color: var(--text-faint); }
+.state-line.ok { color: var(--ok); } .state-line.err { color: var(--err); }
+.state-line.warn { color: var(--warn); } .state-line.act { color: var(--accent-light); }
+
+.rail { grid-area: rail; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; min-width: 0; }
+.rail-nav { padding: 12px 8px 10px; display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid var(--border); }
+.rail-title { font-size: 10px; text-transform: uppercase; letter-spacing: .09em; color: var(--text-faint); padding: 2px 10px 8px; }
+.tab { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: none; border: 1px solid transparent; border-left: 2px solid transparent; color: var(--text-dim); font-size: 13px; text-align: left; padding: 7px 10px; border-radius: 4px; cursor: pointer; }
+.tab:hover { background: var(--hover); color: var(--text); }
+.tab[aria-selected="true"] { color: var(--text); background: var(--elevated); border-left-color: var(--accent); }
+.tab-badge { font-family: var(--font-mono); font-size: 10px; color: var(--accent-light); }
+.rail-agents { padding: 12px 8px 14px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.rail-head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 2px 10px; }
+.rail-head .rail-title { padding: 0; }
+.link-btn { background: none; border: 0; color: var(--accent-light); font-size: 11px; cursor: pointer; padding: 2px 5px; border-radius: 3px; }
+.link-btn:hover { text-decoration: underline; }
+.rail-hint { font-size: 11px; color: var(--text-faint); padding: 0 10px 4px; }
+.agent-list { display: flex; flex-direction: column; gap: 2px; }
+.agent-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; }
+.agent-row:hover { background: var(--hover); }
+.agent-row.selected { background: var(--elevated); }
+.agent-row:focus-within { outline: 2px solid var(--accent-light); outline-offset: 1px; }
+.agent-row input { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+.ar-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.agent-row .dot { width: 7px; height: 7px; }
+
+.main { grid-area: main; overflow-y: auto; padding: 16px 20px 24px; min-width: 0; }
+.main-inner { max-width: 1640px; display: flex; flex-direction: column; gap: 14px; }
+.footer { grid-area: footer; display: flex; align-items: center; justify-content: center; gap: 10px; background: var(--surface); border-top: 1px solid var(--border); font-size: 11px; color: var(--text-faint); padding: 0 12px; white-space: nowrap; overflow: hidden; }
+
+/* ---------- panels ---------- */
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; min-width: 0; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.panel-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); }
+.panel-note { font-size: 11px; color: var(--text-faint); }
+.panel-body { padding: 14px; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px 18px; }
+.kv-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kv-label { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); }
+.kv-value { font-size: 13px; overflow-wrap: anywhere; }
+.big { font-size: 22px; font-weight: 600; font-family: var(--font-mono); }
+
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border: 1px solid var(--border-strong); border-radius: 3px; color: var(--text-dim); white-space: nowrap; width: max-content; }
+.chip.ok { color: var(--ok); border-color: rgba(52,211,153,.4); }
+.chip.err { color: var(--err); border-color: rgba(248,113,113,.4); }
+.chip.warn { color: var(--warn); border-color: rgba(245,165,36,.45); }
+.chip.info { color: var(--info); border-color: rgba(122,167,232,.4); }
+.chip.act { color: var(--accent-light); border-color: rgba(167,139,250,.45); }
+.chip.muted { color: var(--text-faint); }
+
+.btn { color: var(--text); background: var(--elevated); border: 1px solid var(--border-strong); border-radius: 4px; padding: 7px 14px; cursor: pointer; min-height: 34px; font-size: 13px; font-weight: 500; }
+.btn:hover:not(:disabled) { background: var(--hover); border-color: var(--accent); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: var(--accent-dim); }
+.btn.danger { border-color: rgba(248,113,113,.6); color: var(--err); }
+.btn.danger:hover:not(:disabled) { background: rgba(248,113,113,.12); border-color: var(--err); }
+.btn.armed { background: var(--warn); border-color: var(--warn); color: #1a1205; }
+.btn.sm { padding: 3px 10px; font-size: 12px; min-height: 26px; }
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
+.seg button { color: var(--text-dim); font-size: 12px; background: var(--elevated); border: 0; border-right: 1px solid var(--border-strong); padding: 5px 11px; cursor: pointer; min-height: 28px; }
+.seg button:last-child { border-right: 0; }
+.seg button:hover:not(:disabled) { color: var(--text); background: var(--hover); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+.input, select.input { color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 4px; padding: 6px 9px; min-height: 32px; font-family: var(--font-mono); }
+.input { width: 120px; } select.input { width: auto; font-family: var(--font-sans); font-size: 12px; }
+.input:disabled { opacity: .45; cursor: not-allowed; }
+
+.feedback { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 12px; background: var(--elevated); border: 1px solid var(--border); border-left-width: 3px; border-radius: 4px; font-size: 13px; color: var(--text-dim); }
+.feedback .fb-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.feedback.pending, .feedback.running { border-left-color: var(--accent-light); color: var(--text); }
+.feedback.ok { border-left-color: var(--ok); color: var(--text); }
+.feedback.err { border-left-color: var(--err); color: var(--text); }
+.feedback.warn { border-left-color: var(--warn); color: var(--text); }
+.spinner { width: 13px; height: 13px; border: 2px solid var(--border-strong); border-top-color: var(--accent-light); border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+.attn { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.attn li { font-size: 13px; padding: 7px 10px; background: var(--elevated); border: 1px solid var(--border); border-left-width: 3px; border-radius: 4px; overflow-wrap: anywhere; }
+.attn li.err { border-left-color: var(--err); } .attn li.warn { border-left-color: var(--warn); }
+.attn li.info { border-left-color: var(--info); } .attn li.ok { border-left-color: var(--ok); color: var(--text-dim); }
+
+.tl { display: flex; align-items: flex-start; padding: 8px 4px 0; }
+.tl-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; min-width: 0; }
+.tl-step::before { content: ''; position: absolute; top: 6px; left: -50%; right: 50%; height: 2px; background: var(--border-strong); }
+.tl-step:first-child::before { display: none; }
+.tl-step.done::before, .tl-step.on::before { background: var(--accent); }
+.tl-step.fail::before { background: var(--err); }
+.tl-circle { width: 14px; height: 14px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border-strong); position: relative; z-index: 1; }
+.tl-step.on .tl-circle { border-color: var(--accent-light); background: var(--accent); }
+.tl-step.done .tl-circle { border-color: var(--ok); background: var(--ok); }
+.tl-step.fail .tl-circle { border-color: var(--err); background: var(--err); }
+.tl-label { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-faint); text-align: center; }
+.tl-step.on .tl-label { color: var(--accent-light); font-weight: 600; }
+.tl-step.done .tl-label { color: var(--ok); } .tl-step.fail .tl-label { color: var(--err); }
+
+/* ---------- painéis de agente ---------- */
+.panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr)); gap: 16px; align-items: start; }
+.agent-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; min-width: 0; }
+.agent-panel.busy { border-color: rgba(245,165,36,.6); }
+.ap-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.ap-title { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.ap-id { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+.ap-chips { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+.ap-body { padding: 14px; display: flex; flex-direction: column; gap: 16px; }
+.sec-title { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-faint); margin-bottom: 7px; }
+.sec-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.sec-head .sec-title { margin: 0; }
+.commands { display: flex; flex-wrap: wrap; gap: 8px; }
+.result { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; padding: 9px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; min-height: 38px; color: var(--text-dim); }
+.charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 10px; }
+.chart-card { background: var(--elevated); border: 1px solid var(--border); border-radius: 6px; display: flex; flex-direction: column; min-width: 0; }
+.cc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 9px 11px 0; }
+.cc-name { font-size: 13px; font-weight: 600; } .cc-sensor { font-size: 11px; color: var(--text-faint); }
+.cc-value { display: flex; align-items: baseline; gap: 6px; padding: 4px 11px 0; }
+.cc-num { font-family: var(--font-mono); font-size: 24px; font-weight: 500; line-height: 1.2; }
+.cc-num.muted { color: var(--text-faint); }
+.cc-unit { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
+.cc-meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 2px 11px 0; font-size: 11px; color: var(--text-faint); }
+.cc-plot { position: relative; margin: 6px 2px 0; height: 150px; }
+.cc-plot svg { display: block; width: 100%; height: 150px; }
+.cc-foot { padding: 4px 11px 9px; font-size: 11px; color: var(--text-faint); min-height: 22px; overflow-wrap: anywhere; }
+.plot-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 24px; font-size: 12px; color: var(--text-faint); pointer-events: none; }
+svg .ax { stroke: var(--border-strong); stroke-width: 1; }
+svg .grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
+svg .tick { fill: var(--text-faint); font-family: var(--font-mono); font-size: 10px; }
+svg .line { fill: none; stroke: var(--accent-light); stroke-width: 1.6; stroke-linejoin: round; }
+svg .pt { fill: var(--accent-light); }
+svg .pt-last { fill: var(--bg); stroke: var(--accent-light); stroke-width: 2; }
+svg .bad { stroke: var(--err); stroke-width: 1.5; }
+.motor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; }
+.pending-box { border: 1px dashed var(--border-strong); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.pending-box.live { border-style: solid; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label, .field .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); }
+details { border-top: 1px solid var(--border); padding-top: 10px; }
+summary { cursor: pointer; color: var(--text-dim); font-size: 12px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+.log { font-family: var(--font-mono); font-size: 12px; max-height: 60vh; overflow-y: auto; }
+.log-line { display: flex; gap: 12px; padding: 3px 14px; border-bottom: 1px solid var(--border); }
+.log-line .t { color: var(--text-faint); flex-shrink: 0; } .log-line .m { overflow-wrap: anywhere; color: var(--text-dim); }
+.log-line.ok .m { color: var(--ok); } .log-line.err .m { color: var(--err); } .log-line.warn .m { color: var(--warn); } .log-line.info .m { color: var(--info); }
+.log.mini { max-height: 200px; margin-top: 8px; border: 1px solid var(--border); border-radius: 4px; } .log.mini .log-line { padding: 3px 8px; font-size: 11px; }
+.empty { padding: 28px 14px; color: var(--text-faint); font-size: 13px; text-align: center; border: 1px dashed var(--border-strong); border-radius: 6px; }
+.empty-plain { padding: 18px 14px; color: var(--text-faint); font-size: 13px; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+@media (max-width: 860px) {
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: 48px auto minmax(0, 1fr) 28px; grid-template-areas: "header" "rail" "main" "footer"; }
+  .rail { border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; max-height: 46vh; overflow-y: auto; }
+  .rail-nav { flex-direction: row; overflow-x: auto; padding: 6px 8px; }
+  .rail-nav .rail-title { display: none; }
+  .tab { border-left: 1px solid transparent; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .tab[aria-selected="true"] { border-left-color: transparent; border-bottom-color: var(--accent); }
+  .rail-agents { padding: 8px; }
+  .agent-list { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  .agent-row { flex: 0 0 230px; }
+  .rail-hint { display: none; }
+  .main { padding: 12px; }
+  .header { padding: 0 12px; }
+  .header-status { flex-direction: column; align-items: flex-start; gap: 0; font-size: 11px; line-height: 1.35; }
+  .brand-sub { display: none; }
+  .footer { font-size: 10px; }
+}
 </style>
+<base target="_blank">
 </head>
 <body>
+<a class="skip" href="#main">Ir para o conteúdo</a>
 <div class="app">
   <header class="header">
-    <div class="brand">ArcanLab · Tunneus Gateway<small>Controle multiagente simultâneo e independente</small></div>
-    <div class="connections" role="status">
-      <span><span class="dot" id="gw-dot"></span><span id="gw-text">Gateway: verificando</span></span>
-      <span><span class="dot warn" id="sse-dot"></span><span id="sse-text">SSE: conectando</span></span>
+    <div class="brand">
+      <img class="brand-logo" src="/assets/logo-transparent.png" alt="" width="30" height="30" onerror="this.style.display='none'">
+      <div>
+        <div class="brand-name">ArcanLab · Tunneus Gateway</div>
+        <div class="brand-sub">Subagentes ESP32 · controle por capability</div>
+      </div>
+    </div>
+    <div class="header-status" role="status" aria-label="Estado das conexões">
+      <span class="hs-item"><span class="dot" id="gw-dot"></span><span id="gw-text">Gateway: verificando</span></span>
+      <span class="hs-item"><span class="dot warn" id="sse-dot"></span><span id="sse-text">SSE: conectando</span></span>
     </div>
   </header>
-  <aside class="sidebar">
-    <h2>Agentes registrados</h2>
-    <p class="sidebar-note">Selecione um ou mais. A seleção pertence somente a esta guia.</p>
-    <div class="agent-list" id="agent-list"></div>
+
+  <aside class="rail" aria-label="Navegação e seleção de agentes">
+    <nav class="rail-nav" id="nav" role="tablist" aria-orientation="vertical" aria-label="Seções">
+      <div class="rail-title">Navegação</div>
+    </nav>
+    <section class="rail-agents" aria-labelledby="agents-title">
+      <div class="rail-head">
+        <span class="rail-title" id="agents-title">Agentes</span>
+        <span><button type="button" class="link-btn" id="sel-all">Todos</button><button type="button" class="link-btn" id="sel-none">Limpar</button></span>
+      </div>
+      <p class="rail-hint">Marque um ou mais para abrir seus painéis. Cada painel é independente.</p>
+      <div class="agent-list" id="agent-list" role="group" aria-label="Agentes registrados"></div>
+      <div class="rail-hint" id="agent-empty">Carregando…</div>
+    </section>
   </aside>
-  <main class="main">
-    <div class="main-head"><div><h1>Painéis de operação</h1><p>Cada operação usa Wake e uma sessão WebSocket temporária.</p></div><span class="tiny faint" id="sync"></span></div>
-    <div class="panels" id="panels"></div>
-    <div class="empty" id="empty">Selecione um agente para abrir seu painel.</div>
+
+  <main class="main" id="main" tabindex="-1">
+    <div class="main-inner">
+
+      <!-- ============ VISÃO GERAL ============ -->
+      <section id="view-overview" role="tabpanel" aria-labelledby="tab-overview" class="stack">
+        <div class="panel">
+          <div class="panel-body"><div id="ov-summary" class="dim" title="Contadores de operação são do navegador, não do Gateway"></div></div>
+        </div>
+        <div class="panel hidden" id="ov-attn-panel">
+          <div class="panel-head"><span class="panel-title">Atenção</span></div>
+          <div class="panel-body"><ul class="attn" id="ov-attn"></ul></div>
+        </div>
+        <div class="panel hidden" id="ov-tl-panel" title="Cada etapa só é marcada quando o evento correspondente chega pelo SSE. STANDBY é o estado normal de repouso, não uma falha.">
+          <div class="panel-head"><span class="panel-title">Pico de Conexão</span><span class="panel-note" id="tl-caption"></span></div>
+          <div class="panel-body"><div class="tl" id="tl" role="list" aria-label="Etapas da última operação"></div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">Subagentes</span><span class="panel-note">dados do Registry via /api/agents</span></div>
+          <div class="table-wrap">
+            <table id="ov-agents"><thead><tr><th>Agente</th><th>Tipo</th><th>Estado</th><th>Caps</th><th></th></tr></thead><tbody></tbody></table>
+          </div>
+          <div class="empty-plain hidden" id="ov-agents-empty">Nenhum agente registrado.</div>
+        </div>
+      </section>
+
+      <!-- ============ PAINÉIS ============ -->
+      <section id="view-panels" role="tabpanel" aria-labelledby="tab-panels" class="hidden">
+        <div class="panels" id="panels"></div>
+        <div class="empty hidden" id="panels-empty">Nenhum agente selecionado. Marque um agente na lista à esquerda para abrir seu painel.</div>
+      </section>
+
+      <!-- ============ OPERAÇÕES ============ -->
+      <section id="view-ops" role="tabpanel" aria-labelledby="tab-ops" class="hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">Operações</span>
+            <div class="row"><label class="tiny faint" for="flt-ops">Agente</label><select class="input" id="flt-ops" data-flt></select><span class="panel-note">últimas 100 por agente</span></div>
+          </div>
+          <div class="table-wrap"><table id="ops-table"><thead><tr><th>Horário</th><th>Agente</th><th>Comando</th><th>Estado</th><th>Etapa</th><th>Resultado / erro</th><th>Operação</th></tr></thead><tbody></tbody></table></div>
+          <div class="empty-plain" id="ops-empty">Nenhuma operação nesta sessão.</div>
+        </div>
+      </section>
+
+      <!-- ============ EVENTOS ============ -->
+      <section id="view-events" role="tabpanel" aria-labelledby="tab-events" class="hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">Eventos</span>
+            <div class="row"><label class="tiny faint" for="flt-ev">Agente</label><select class="input" id="flt-ev" data-flt></select><span class="panel-note">últimos 400</span></div>
+          </div>
+          <div class="log" id="log" tabindex="0" aria-label="Registro de eventos"></div>
+        </div>
+      </section>
+    </div>
   </main>
+
+  <footer class="footer">
+    <span>Dashboard v6.0</span><span aria-hidden="true">·</span>
+    <span id="foot-agents">0 agentes</span><span aria-hidden="true">·</span>
+    <span id="foot-sync">Sem dados do Gateway</span>
+  </footer>
 </div>
+
 <script>
 'use strict';
-const CFG = { pollMs:3000, maxOps:100, maxLogs:100, maxSamples:1000, watchMs:150000, armMs:4000, motorSafetyMs:60000 };
-const PHASES = [['standby','Standby'],['wake','Wake'],['auth','Auth'],['cmd','Cmd'],['result','Result']];
-const STAGE = {command_created:'standby',wake_sent:'wake',auth_ok:'auth',command_sent:'cmd',result_received:'result'};
-const TRANSIENT = {wake_sent:'connecting',auth_ok:'authenticated',command_sent:'executing'};
-const SENSOR_CAPS = new Set(['LER_SENSORES','TEMPERATURA','PRESSAO','ALTITUDE','CORRENTE','DISTANCIA']);
-const MOTOR_CAPS = new Set(['START','PARE','MOVER']);
-const LABELS = {LER_SENSORES:'Ler todos os sensores',TEMPERATURA:'Temperatura',PRESSAO:'Pressão',ALTITUDE:'Altitude',CORRENTE:'Corrente',DISTANCIA:'Distância',START:'Iniciar motor',PARE:'Parar motor',MOVER:'Executar movimento',LED_ON:'Ligar LED',LED_OFF:'Desligar LED'};
-const REASONS = {max_retries_exhausted:'O agente não respondeu após todas as tentativas.',result_unconfirmed_no_retry:'O comando foi entregue, mas o Result não chegou. Não foi reenviado para evitar duplicidade.'};
+// ============================================================
+// CONFIGURAÇÃO
+// ============================================================
+const CFG = {
+  api: '',
+  defaultAgent: 'esp32-03',      // aberto por padrão se existir no Registry
+  pollMs: 3000,                  // polling do Registry (complemento ao SSE)
+  staleMs: 5 * 60 * 1000,        // leitura sob demanda: após isso, "desatualizada"
+  maxSamples: 1000, retainMs: 24 * 3600 * 1000,
+  watchMs: 150 * 1000,           // sem evento final: "sem confirmação"
+  maxOps: 100, maxLogs: 400,
+  motorSafetyMs: 60 * 1000,      // limite de segurança do firmware do Agente 03 (TEMPO_MAX_MOTOR_MS)
+  armMs: 4000,                   // tempo para confirmar START/MOVER
+  opStateTtlMs: 90 * 1000,       // estado "ocupado" deduzido localmente expira se a API não informar operation_state
+  maxSteps: 30000,               // limite do formulário de movimento (premissa do rascunho; validar no firmware)
+  halfPulseUs: { lenta: 800, normal: 400, rapida: 200 }   // estimativa de duração do MOVER (premissa do rascunho)
+};
+
+// Rótulos conhecidos. Capabilities fora desta lista aparecem com o nome literal do Registry.
+const LABELS = {
+  LER_SENSORES: 'Ler todos os sensores', TEMPERATURA: 'Temperatura', PRESSAO: 'Pressão', ALTITUDE: 'Altitude',
+  CORRENTE: 'Corrente', DISTANCIA: 'Distância', START: 'Iniciar motor', PARE: 'Parar motor', MOVER: 'Executar movimento',
+  LED_ON: 'Ligar LED', LED_OFF: 'Desligar LED', LIGAR: 'Ligar', DESLIGAR: 'Desligar',
+  LIGAR_LED: 'Ligar LED', DESLIGAR_LED: 'Desligar LED', ESTADO_LEDS: 'Consultar estado dos LEDs'
+};
+const SENSOR_CAPS = new Set(['LER_SENSORES', 'TEMPERATURA', 'PRESSAO', 'ALTITUDE', 'CORRENTE', 'DISTANCIA']);
+const MOTOR_CAPS = new Set(['START', 'PARE', 'MOVER']);
+const LED_CAPS = new Set(['LIGAR_LED', 'DESLIGAR_LED', 'ESTADO_LEDS']);
+const LED_CORES = [['vermelho', 'Vermelho', 'var(--err)'], ['amarelo', 'Amarelo', 'var(--warn)'], ['verde', 'Verde', 'var(--ok)']];
+
 const QTY = [
-  {id:'distancia',name:'Distância',key:'DISTANCIA',cap:'DISTANCIA',fw:'cm',unit:'cm',dec:1},
-  {id:'temperatura',name:'Temperatura',key:'TEMPERATURA',cap:'TEMPERATURA',fw:'C',unit:'°C',dec:2},
-  {id:'pressao',name:'Pressão',key:'PRESSAO',cap:'PRESSAO',fw:'Pa',unit:'hPa',dec:1,conv:v=>v/100},
-  {id:'altitude',name:'Altitude',key:'ALTITUDE',cap:'ALTITUDE',fw:'m',unit:'m',dec:1},
-  {id:'corrente',name:'Corrente',key:'CORRENTE',cap:'CORRENTE',fw:'A',unit:'A',dec:3}
+  { id: 'distancia',   name: 'Distância',           sensor: 'HC-SR04',            key: 'DISTANCIA',   cap: 'DISTANCIA',   fw: 'cm', unit: 'cm',  dec: 1 },
+  { id: 'temperatura', name: 'Temperatura',         sensor: 'BMP180',             key: 'TEMPERATURA', cap: 'TEMPERATURA', fw: 'C',  unit: '°C',  dec: 2 },
+  { id: 'pressao',     name: 'Pressão atmosférica', sensor: 'BMP180',             key: 'PRESSAO',     cap: 'PRESSAO',     fw: 'Pa', unit: 'hPa', dec: 1, conv: v => v / 100 },
+  { id: 'altitude',    name: 'Altitude',            sensor: 'BMP180 (calculada)', key: 'ALTITUDE',    cap: 'ALTITUDE',    fw: 'm',  unit: 'm',   dec: 1, note: 'Referência de nível do mar fixa no firmware.' },
+  { id: 'corrente',    name: 'Corrente elétrica',   sensor: 'ACS712',             key: 'CORRENTE',    cap: 'CORRENTE',    fw: 'A',  unit: 'A',   dec: 3 }
 ];
-const requestedAgent = new URLSearchParams(location.search).get('agent');
-const S = {agents:new Map(),selected:new Set(),panels:new Map(),gw:null,sse:false,lastSync:0,structureKey:''};
-const $ = id => document.getElementById(id);
-function h(tag,props,...children) {
-  const el=document.createElement(tag);
-  for(const [k,v] of Object.entries(props||{})) {
-    if(v==null||v===false) continue;
-    if(k==='class') el.className=v; else if(k==='text') el.textContent=v;
-    else if(k.startsWith('on')) el.addEventListener(k.slice(2),v); else el.setAttribute(k,v===true?'':String(v));
+const WINDOWS = [{ ms: 15 * 60e3, label: '15 min' }, { ms: 3600e3, label: '1 h' }, { ms: 6 * 3600e3, label: '6 h' }, { ms: 24 * 3600e3, label: '24 h' }];
+const PHASES = [['standby', 'Standby'], ['wake', 'Wake'], ['auth', 'Auth'], ['cmd', 'Cmd'], ['result', 'Result']];
+const EVT_STAGE = { command_created: 'standby', wake_sent: 'wake', auth_ok: 'auth', command_sent: 'cmd', result_received: 'result' };
+const EVT_TRANSIENT = { wake_sent: 'connecting', auth_ok: 'authenticated', command_sent: 'executing', result_received: 'standby' };
+const AGENT_STATES = {
+  standby:       { t: 'standby',      c: 'muted', d: 'Em espera (estado normal)' },
+  connecting:    { t: 'Conectando',   c: 'warn', d: 'Wake enviado' },
+  authenticated: { t: 'Autenticado',  c: 'act',  d: 'Sessão autenticada' },
+  executing:     { t: 'Executando',   c: 'act',  d: 'Comando em execução' },
+  completed:     { t: 'Concluído',    c: 'ok',   d: '' },
+  failed:        { t: 'Falhou',       c: 'err',  d: '' },
+  unreachable:   { t: 'sem resposta', c: 'warn', d: 'Última tentativa de contato falhou' }
+};
+const REASONS = {
+  max_retries_exhausted: 'O agente não respondeu após todas as tentativas.',
+  result_unconfirmed_no_retry: 'O comando foi entregue, mas o Result não chegou. Não foi reenviado para evitar duplicidade.'
+};
+const VIEWS = [['overview', 'Visão geral'], ['panels', 'Painéis'], ['ops', 'Operações'], ['events', 'Eventos']];
+
+// ============================================================
+// ESTADO
+// ============================================================
+const S = {
+  agents: new Map(),            // agent_id -> dados do Registry (+ operation_state)
+  st: new Map(),                // agent_id -> estado da interface do agente
+  selected: new Set(),
+  panels: new Map(),            // agent_id -> { el, key }
+  gw: null, gwLast: 0, sse: false, sseTimer: 0, loaded: false,
+  view: 'overview', filter: '', logs: [], localSeq: 0, unknownWarned: new Set(),
+  sig: {}
+};
+let rafId = 0;
+function ag(id) {
+  let s = S.st.get(id);
+  if (!s) {
+    s = { id, ops: new Map(), order: [], samples: Object.fromEntries(QTY.map(q => [q.id, []])), seen: new Set(),
+      sending: false, fb: { cls: 'idle', text: 'Aguardando comando.' }, retry: null,
+      motor: { cmd: null, t: 0, until: 0, unconfirmed: false },
+      leds: { VERMELHO: null, AMARELO: null, VERDE: null, t: 0 },
+      move: { dir: 'direita', speed: 'normal', steps: 200 },
+      armed: null, armedAt: 0, armTimer: 0, win: WINDOWS[0].ms, chartsDirty: true };
+    S.st.set(id, s);
   }
-  for(const child of children.flat()) if(child!=null&&child!==false) el.append(child instanceof Node?child:document.createTextNode(String(child)));
-  return el;
+  return s;
 }
-function field(panel,name) { return panel.querySelector(`[data-f="${name}"]`); }
-function fmtTime(t) { return t?new Date(t).toLocaleTimeString('pt-BR'):'—'; }
-function fmtDuration(ms) { return ms==null?'—':ms<1000?`${Math.round(ms)} ms`:`${(ms/1000).toFixed(2)} s`; }
-function cut(value,n=140) { const s=String(value??''); return s.length>n?s.slice(0,n-1)+'…':s; }
-function capLabel(cmd) { return LABELS[cmd]||cmd||'—'; }
-function newPanelState(agentID) {
-  return {agentID,ops:new Map(),order:[],logs:[],samples:Object.fromEntries(QTY.map(q=>[q.id,[]])),seen:new Set(),sending:false,feedback:{kind:'idle',text:'Aguardando comando.'},retry:null,motor:{cmd:null,t:0,until:0,args:null,unconfirmed:false},move:{dir:'direita',speed:'normal',steps:200},armedCmd:null,armedAt:0,armTimer:null};
+
+// ============================================================
+// UTILITÁRIOS
+// ============================================================
+const $ = id => document.getElementById(id);
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  if (props) for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : String(v));
+  }
+  for (const c of kids.flat()) { if (c == null || c === false) continue; e.append(c instanceof Node ? c : document.createTextNode(String(c))); }
+  return e;
 }
-function panelState(agentID) { if(!S.panels.has(agentID)) S.panels.set(agentID,newPanelState(agentID)); return S.panels.get(agentID); }
-function log(agentID,type,message,opID) {
-  const ps=panelState(agentID); ps.logs.push({t:Date.now(),type,message:String(message),opID}); if(ps.logs.length>CFG.maxLogs) ps.logs.shift();
+const NS = 'http://www.w3.org/2000/svg';
+function sv(tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, String(v));
+  if (text != null) e.textContent = text;
+  return e;
 }
-function activeOp(ps) { for(const id of ps.order) { const op=ps.ops.get(id); if(op&&(op.status==='accepted'||op.status==='running')) return op; } return null; }
-function lastOp(ps) { for(let i=ps.order.length-1;i>=0;i--) { const op=ps.ops.get(ps.order[i]); if(op) return op; } return null; }
-function ensureOp(agentID,id,cmd,args) {
-  const ps=panelState(agentID); let op=ps.ops.get(id);
-  if(!op) {
-    op={id,cmd:cmd||null,args:args||null,t0:Date.now(),tEnd:0,status:'accepted',stage:'standby',attempt:0,stdout:'',stderr:'',reason:'',final:false};
-    ps.ops.set(id,op); ps.order.push(id); while(ps.order.length>CFG.maxOps) ps.ops.delete(ps.order.shift());
-    op.watch=setTimeout(()=>watchdog(agentID,id),CFG.watchMs);
-  } else { if(cmd&&!op.cmd)op.cmd=cmd; if(args&&!op.args)op.args=args; }
+const pad = n => String(n).padStart(2, '0');
+function fmtTime(ms, withSec = true) {
+  if (!ms) return '—';
+  const d = new Date(ms);
+  return withSec ? `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fmtAgo(ms) { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min` : `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`; }
+function fmtDur(ms) { return ms == null ? '—' : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`; }
+const str = v => (typeof v === 'string' ? v : v == null ? '' : String(v));
+function cut(s, n) { s = str(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+const capLabel = c => LABELS[c] || c || '—';
+function agentName(id) { const a = S.agents.get(id); return (a && str(a.name)) || id; }
+function schedule() { if (!rafId) rafId = requestAnimationFrame(() => { rafId = 0; renderAll(); }); }
+function sigSkip(key, value) { const s = JSON.stringify(value); if (S.sig[key] === s) return true; S.sig[key] = s; return false; }
+
+// ============================================================
+// LOG E FEEDBACK
+// ============================================================
+function log(agent, type, msg, opId) {
+  S.logs.push({ t: Date.now(), agent: agent || null, type, msg: str(msg), op: opId || null });
+  if (S.logs.length > CFG.maxLogs) S.logs.shift();
+  schedule();
+}
+function setFb(id, cls, text) { ag(id).fb = { cls, text }; schedule(); }
+
+// ============================================================
+// AGENTES / ESTADO
+// ============================================================
+const agentList = () => [...S.agents.values()].sort((a, b) => a.agent_id.localeCompare(b.agent_id));
+function stateInfo(a) {
+  if (!a) return { t: '—', c: 'muted', d: '' };
+  const k = str(a.status);
+  if (AGENT_STATES[k]) return AGENT_STATES[k];
+  return { t: k ? 'Desconhecido' : '—', c: 'muted', d: k ? `Valor não reconhecido: ${cut(k, 30)}` : '' };
+}
+function activeOp(s) { for (const id of s.order) { const o = s.ops.get(id); if (o && !o.final) return o; } return null; }
+function lastOp(s) { for (let i = s.order.length - 1; i >= 0; i--) { const o = s.ops.get(s.order[i]); if (o) return o; } return null; }
+function latestOp() {
+  let best = null;
+  for (const s of S.st.values()) { const o = lastOp(s); if (o && (!best || o.t0 > best.op.t0)) best = { op: o, id: s.id }; }
+  return best;
+}
+const isBusy = id => { const a = S.agents.get(id); return !!(a && a.operation_state === 'in_operation'); };
+const busyAny = id => isBusy(id) || !!activeOp(ag(id));
+
+function canSend(id, cmd) {
+  const a = S.agents.get(id), s = ag(id);
+  return !!(a && a.capabilities.includes(cmd) && S.gw && !s.sending && !activeOp(s) && !isBusy(id));
+}
+function disabledReason(id, cmd) {
+  const a = S.agents.get(id), s = ag(id);
+  if (!a) return 'Agente não encontrado no Registry';
+  if (!a.capabilities.includes(cmd)) return 'Capability não cadastrada no Registry para este agente';
+  if (!S.gw) return 'Gateway indisponível';
+  if (isBusy(id)) return 'Agente ocupado com outra operação';
+  if (s.sending || activeOp(s)) return 'Há uma operação em andamento neste agente';
+  return '';
+}
+
+// ============================================================
+// OPERAÇÕES (por agente)
+// status: accepted | running | confirmed | failed | rejected | unknown
+// ============================================================
+function ensureOp(id, opId, cmd, args) {
+  const s = ag(id);
+  let op = s.ops.get(opId);
+  if (!op) {
+    op = { id: opId, agent: id, cmd: cmd || null, args: args || null, t0: Date.now(), tEnd: 0, status: 'accepted', stage: 'standby', attempt: 0, stdout: '', stderr: '', reason: '', final: false, watch: 0 };
+    s.ops.set(opId, op); s.order.push(opId);
+    while (s.order.length > CFG.maxOps) s.ops.delete(s.order.shift());
+    op.watch = setTimeout(() => watchdog(id, opId), CFG.watchMs);
+  } else { if (cmd && !op.cmd) op.cmd = cmd; if (args && !op.args) op.args = args; }
+  schedule();
   return op;
 }
-function closeOp(op,status,reason) { op.status=status;op.final=true;op.tEnd=Date.now();if(reason)op.reason=reason;clearTimeout(op.watch); }
-async function watchdog(agentID,id) {
-  const op=panelState(agentID).ops.get(id); if(!op||op.final)return;
-  closeOp(op,'unknown','Sem evento final do Gateway nesta guia.'); setFeedback(agentID,'warn',`${capLabel(op.cmd)}: sem confirmação final.`);
-  try { const r=await fetch(`/api/operations/${encodeURIComponent(id)}`,{cache:'no-store'}); const data=await r.json(); log(agentID,'info',`Consulta da operação: HTTP ${r.status}, status ${data.operation?.status||'desconhecido'}`,id); }
-  catch(e){log(agentID,'warn','Consulta da operação falhou: '+e.message,id);} updatePanel(agentID);
+function closeOp(op, status, reason) {
+  op.status = status; op.final = true; op.tEnd = Date.now();
+  if (reason) op.reason = reason;
+  clearTimeout(op.watch); schedule();
 }
-function canSend(agentID,cmd) {
-  const a=S.agents.get(agentID),ps=panelState(agentID);
-  return !!(a&&(a.capabilities||[]).includes(cmd)&&S.gw&&!ps.sending&&!activeOp(ps)&&a.operation_state!=='in_operation');
-}
-function disabledReason(agentID,cmd) {
-  const a=S.agents.get(agentID),ps=panelState(agentID);
-  if(!a)return'Agente não registrado'; if(!(a.capabilities||[]).includes(cmd))return'Capability não cadastrada';
-  if(!S.gw)return'Gateway indisponível'; if(a.operation_state==='in_operation')return'Agente ocupado';
-  if(ps.sending||activeOp(ps))return'Operação em andamento'; return'';
-}
-function setFeedback(agentID,kind,text) { panelState(agentID).feedback={kind,text}; }
-async function sendCommand(agentID,cmd,args) {
-  if(!canSend(agentID,cmd)){log(agentID,'warn',`Envio bloqueado: ${disabledReason(agentID,cmd)}`);updatePanel(agentID);return;}
-  const ps=panelState(agentID);ps.sending=true;ps.retry=null;setFeedback(agentID,'running',`Enviando ${capLabel(cmd)}…`);updatePanel(agentID);
-  let response,data;
+async function watchdog(id, opId) {
+  const op = ag(id).ops.get(opId);
+  if (!op || op.final) return;
+  closeOp(op, 'unknown', 'Sem evento final do Gateway. O resultado pode ter chegado sem ser recebido por este navegador.');
+  setFb(id, 'warn', `${capLabel(op.cmd)}: sem confirmação final. Verifique o histórico e o estado do agente.`);
+  log(id, 'warn', `Operação sem confirmação final; consultando o Gateway.`, opId);
   try {
-    response=await fetch(`/api/agents/${encodeURIComponent(agentID)}/command`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(args?{cmd,args}:{cmd})});
-    data=await response.json();
-  } catch(e) {
-    ps.sending=false;rejectCommand(agentID,cmd,args,'Falha de rede: '+e.message);return;
-  }
-  ps.sending=false;
-  if(response.status===202&&data?.success&&typeof data.op_id==='string') {
-    const op=ensureOp(agentID,data.op_id,cmd,args);op.http=202;
-    if(!op.final)setFeedback(agentID,'running',`${capLabel(cmd)} aceito (HTTP 202). Aguardando Result.`);
-    log(agentID,'info',`Operação ${data.op_id} aceita`,data.op_id);
-  } else if(response.status===409) {
-    const a=S.agents.get(agentID);if(a){a.operation_state='in_operation';a.active_op_id=data.active_op_id||'';}
-    ps.retry={cmd,args:args||null};rejectCommand(agentID,cmd,args,data?.message||'Agente ocupado',409);
-    renderAgentList();
-  } else rejectCommand(agentID,cmd,args,data?.message||`Resposta inesperada (HTTP ${response.status})`,response.status);
-  updateAll();
+    const r = await fetch(`${CFG.api}/api/operations/${encodeURIComponent(opId)}`, { cache: 'no-store' });
+    let st = '';
+    try { const j = await r.json(); st = str((j && j.operation && j.operation.status) || (j && j.status)); } catch (e) { /* formato desconhecido */ }
+    log(id, 'info', `Consulta da operação: HTTP ${r.status}${st ? ', status "' + cut(st, 30) + '"' : ', formato não reconhecido'}.`, opId);
+  } catch (e) { log(id, 'warn', 'Consulta da operação falhou: ' + e.message, opId); }
 }
-function rejectCommand(agentID,cmd,args,reason,http) {
-  const ps=panelState(agentID),id=`local-${Date.now()}-${ps.order.length}`;
-  ps.ops.set(id,{id,cmd,args:args||null,t0:Date.now(),tEnd:Date.now(),status:'rejected',stage:'standby',reason:String(reason),http,final:true,stdout:'',stderr:''});ps.order.push(id);
-  setFeedback(agentID,http===409?'warn':'err',`${capLabel(cmd)} não foi aceito: ${reason}${http===409?' Use “Tentar novamente” quando o agente estiver disponível.':''}`);
-  log(agentID,http===409?'warn':'err',`Comando recusado${http?' (HTTP '+http+')':''}: ${reason}`);
+
+async function sendCmd(id, cmd, args) {
+  if (!canSend(id, cmd)) { log(id, 'warn', `Envio bloqueado (${cmd}): ${disabledReason(id, cmd)}`); return; }
+  const s = ag(id);
+  s.sending = true; s.retry = null;
+  setFb(id, 'pending', `Enviando ${capLabel(cmd)} ao Gateway…`);
+  log(id, 'info', `Solicitando ${cmd}${args ? ' ' + JSON.stringify(args) : ''}`);
+  let r = null, d = null;
+  try {
+    r = await fetch(`${CFG.api}/api/agents/${encodeURIComponent(id)}/command`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args ? { cmd, args } : { cmd })
+    });
+    try { d = await r.json(); } catch (e) { d = null; }
+  } catch (e) { s.sending = false; rejectLocal(id, cmd, args, 'Falha de rede ao enviar: ' + e.message); return; }
+  s.sending = false;
+  if (r.ok && d && d.success && typeof d.op_id === 'string') {
+    const op = ensureOp(id, d.op_id, cmd, args); op.http = r.status;
+    if (!op.final) setFb(id, 'running', `${capLabel(cmd)} aceito pelo Gateway (HTTP ${r.status}). Aguardando execução; o resultado ainda não foi confirmado.`);
+    log(id, 'info', `Operação aceita (HTTP ${r.status})`, d.op_id);
+  } else if (r.status === 409) {
+    const a = S.agents.get(id);
+    if (a) { a.operation_state = 'in_operation'; a.opStateT = Date.now(); a.active_op_id = str(d && d.active_op_id); }
+    s.retry = { cmd, args: args || null };
+    rejectLocal(id, cmd, args, str(d && d.message) || 'Agente ocupado', 409);
+  } else rejectLocal(id, cmd, args, str(d && d.message) || `Resposta inesperada (HTTP ${r.status})`, r.status);
+  schedule();
 }
-function finishResult(agentID,op,stdout,stderr) {
-  op.stdout=String(stdout??'');op.stderr=String(stderr??'');op.stage='result';
-  if(op.stderr.trim())closeOp(op,'failed',op.stderr.trim());else if(!op.stdout.trim())closeOp(op,'failed','O agente respondeu sem saída.');else closeOp(op,'confirmed');
-  ingestResult(agentID,op);
-  const ps=panelState(agentID);
-  if(op.status==='confirmed'&&MOTOR_CAPS.has(op.cmd)) {
-    const duration=op.cmd==='START'?CFG.motorSafetyMs:op.cmd==='MOVER'?Math.min(estimateMove(op.args),CFG.motorSafetyMs):0;
-    ps.motor={cmd:op.cmd,t:op.tEnd,until:duration?op.tEnd+duration:0,args:op.args,unconfirmed:false};
+function rejectLocal(id, cmd, args, why, http) {
+  const s = ag(id), opId = 'local-' + (++S.localSeq);
+  const op = { id: opId, agent: id, cmd, args: args || null, t0: Date.now(), tEnd: Date.now(), status: 'rejected', stage: 'standby', attempt: 0, stdout: '', stderr: '', reason: str(why), http, final: true, watch: 0 };
+  s.ops.set(opId, op); s.order.push(opId);
+  while (s.order.length > CFG.maxOps) s.ops.delete(s.order.shift());
+  setFb(id, http === 409 ? 'warn' : 'err', `${capLabel(cmd)} não foi aceito: ${why}${http === 409 ? ' Use "Tentar novamente" quando o agente estiver disponível.' : ''}`);
+  log(id, http === 409 ? 'warn' : 'err', `Comando ${cmd} recusado${http ? ' (HTTP ' + http + ')' : ''}: ${why}`);
+}
+
+// ----- motor -----
+function moveArgs(id) {
+  const m = ag(id).move;
+  if (!Number.isInteger(m.steps) || m.steps < 1 || m.steps > CFG.maxSteps) return { err: `Passos deve ser um inteiro entre 1 e ${CFG.maxSteps}.` };
+  return { dir: m.dir, steps: m.steps, speed: m.speed };
+}
+function estimateMove(args) { const us = args && CFG.halfPulseUs[args.speed]; return us && args.steps ? args.steps * 2 * us / 1000 : 0; }
+function onMotor(id, cmd) {
+  const s = ag(id); let args = null;
+  if (cmd === 'MOVER') { args = moveArgs(id); if (args.err) { setFb(id, 'err', args.err); return; } }
+  if (cmd === 'START' || cmd === 'MOVER') {
+    const now = Date.now();
+    if (s.armed === cmd && now - s.armedAt < CFG.armMs) { disarm(id); sendCmd(id, cmd, args); return; }
+    s.armed = cmd; s.armedAt = now; clearTimeout(s.armTimer); s.armTimer = setTimeout(() => disarm(id), CFG.armMs);
+    setFb(id, 'warn', cmd === 'MOVER' ? `Confirme o movimento: ${args.steps} passos, ${args.dir}, ${args.speed}.` : 'Clique novamente em "Confirmar START" para acionar o motor.');
+    return;
   }
-  setFeedback(agentID,op.status==='confirmed'?'ok':'err',op.status==='confirmed'?`${capLabel(op.cmd)}: confirmado. ${cut(op.stdout)}`:`${capLabel(op.cmd)}: falhou. ${cut(op.reason)}`);
-  log(agentID,op.status==='confirmed'?'ok':'err',op.status==='confirmed'?`Resultado: ${op.stdout}`:`Falha: ${op.reason}`,op.id);
+  disarm(id); sendCmd(id, cmd);
+}
+function disarm(id) { const s = ag(id); s.armed = null; s.armedAt = 0; clearTimeout(s.armTimer); schedule(); }
+function motorRunning(s) { return (s.motor.cmd === 'START' || s.motor.cmd === 'MOVER') && s.motor.until && Date.now() < s.motor.until; }
+
+// ============================================================
+// PARSING DAS LEITURAS (texto do firmware do Agente 03)
+// ============================================================
+const VAL_RE = /^(-?\d+(?:\.\d+)?)\s*(C|Pa|m|A|cm)$/;
+function parseValue(txt, q) {
+  const t = str(txt).trim();
+  if (t === 'NA') return { ok: false, why: 'sem leitura (NA)' };
+  const m = VAL_RE.exec(t);
+  if (!m) return { ok: false, why: `formato não reconhecido: "${cut(t, 30)}"` };
+  if (m[2] !== q.fw) return { ok: false, why: `unidade inesperada: ${m[2]}` };
+  const n = parseFloat(m[1]);
+  if (!Number.isFinite(n)) return { ok: false, why: 'valor não numérico' };
+  if (q.id === 'distancia' && n < 0) return { ok: false, why: 'sem eco do HC-SR04' };
+  return { ok: true, v: q.conv ? q.conv(n) : n };
+}
+function parseBatch(stdout) {
+  const out = {};
+  for (const part of str(stdout).split('|')) { const i = part.indexOf('='); if (i < 0) continue; const k = part.slice(0, i).trim(); if (/^[A-Z_]+$/.test(k)) out[k] = part.slice(i + 1).trim(); }
+  return out;
+}
+function addSample(id, q, op, res, t) {
+  const s = ag(id), key = op.id + ':' + q.id;
+  if (s.seen.has(key)) return;
+  s.seen.add(key); if (s.seen.size > 6000) s.seen.delete(s.seen.values().next().value);
+  const arr = s.samples[q.id];
+  arr.push(res.ok ? { t, v: res.v, op: op.id } : { t, v: null, bad: res.why, op: op.id });
+  const cutoff = t - CFG.retainMs;
+  while (arr.length > CFG.maxSamples || (arr.length && arr[0].t < cutoff)) arr.shift();
+  s.chartsDirty = true;
+}
+function ingest(id, op) {
+  const t = op.tEnd || Date.now();
+  if (op.cmd === 'LER_SENSORES') {
+    if (op.status !== 'confirmed') return;
+    const kv = parseBatch(op.stdout), missing = [];
+    for (const q of QTY) {
+      if (!(q.key in kv)) { missing.push(q.key); continue; }
+      const res = parseValue(kv[q.key], q); addSample(id, q, op, res, t);
+      if (!res.ok) log(id, 'warn', `${q.name}: amostra inválida (${res.why})`, op.id);
+    }
+    if (missing.length) log(id, 'warn', `Resposta incompleta; campos ausentes: ${missing.join(', ')}`, op.id);
+    return;
+  }
+  const q = QTY.find(x => x.cap === op.cmd);
+  if (!q) return;
+  if (op.status === 'confirmed') {
+    const res = parseValue(op.stdout, q); addSample(id, q, op, res, t);
+    if (!res.ok) log(id, 'warn', `${q.name}: amostra inválida (${res.why})`, op.id);
+  } else if (op.status === 'failed' && op.stderr.trim()) addSample(id, q, op, { ok: false, why: cut(op.stderr.trim(), 80) }, t);
+}
+function finishResult(id, op, stdout, stderr) {
+  op.stdout = str(stdout); op.stderr = str(stderr); op.stage = 'result';
+  if (op.stderr.trim()) closeOp(op, 'failed', op.stderr.trim());
+  else if (!op.stdout.trim()) closeOp(op, 'failed', 'O agente respondeu sem saída.');
+  else closeOp(op, 'confirmed');
+  ingest(id, op);
+  const s = ag(id);
+  if (op.status === 'confirmed' && op.cmd === 'ESTADO_LEDS') {
+    const kv = parseBatch(op.stdout);
+    for (const k of ['VERMELHO', 'AMARELO', 'VERDE']) if (kv[k] === 'ON' || kv[k] === 'OFF') s.leds[k] = kv[k] === 'ON';
+    s.leds.t = op.tEnd;
+  }
+  if (op.status === 'confirmed' && (op.cmd === 'LIGAR_LED' || op.cmd === 'DESLIGAR_LED') && op.args && op.args.cor) {
+    s.leds[str(op.args.cor).toUpperCase()] = op.cmd === 'LIGAR_LED';
+    s.leds.t = op.tEnd;
+  }
+  if (op.status === 'confirmed' && MOTOR_CAPS.has(op.cmd)) {
+    const dur = op.cmd === 'START' ? CFG.motorSafetyMs : op.cmd === 'MOVER' ? Math.min(estimateMove(op.args), CFG.motorSafetyMs) : 0;
+    s.motor = { cmd: op.cmd, t: op.tEnd, until: dur ? op.tEnd + dur : 0, unconfirmed: false };
+  }
+  if (op.status === 'confirmed') { setFb(id, 'ok', `${capLabel(op.cmd)}: confirmado. ${cut(op.stdout, 140)}`); log(id, 'ok', `Resultado: ${cut(op.stdout, 160)}`, op.id); }
+  else { setFb(id, 'err', `${capLabel(op.cmd)}: falhou. ${cut(op.reason, 140)}`); log(id, 'err', `Falha: ${cut(op.reason, 160)}`, op.id); }
+}
+
+// ============================================================
+// SSE
+// ============================================================
+function connectSSE() {
+  clearTimeout(S.sseTimer);
+  let src;
+  try { src = new EventSource(`${CFG.api}/api/events`); } catch (e) { S.sse = false; S.sseTimer = setTimeout(connectSSE, 3000); schedule(); return; }
+  src.onopen = () => { const was = S.sse; S.sse = true; schedule(); if (!was) { log(null, 'ok', 'SSE conectado'); loadAgents(); } };
+  src.onerror = () => {
+    if (S.sse) log(null, 'warn', 'SSE desconectado; tentando reconectar');
+    S.sse = false; schedule();
+    if (src.readyState === 2) S.sseTimer = setTimeout(connectSSE, 3000);
+  };
+  src.onmessage = e => {
+    let ev; try { ev = JSON.parse(e.data); } catch (x) { log(null, 'err', 'Evento SSE com JSON inválido: ' + cut(e.data, 80)); return; }
+    handleEvent(ev);
+  };
 }
 function handleEvent(ev) {
-  if(!ev||typeof ev.event!=='string'||ev.event==='sse_connected')return;
-  const agentID=ev.agent_id;if(typeof agentID!=='string')return;
-  const a=S.agents.get(agentID)||{agent_id:agentID,name:agentID,capabilities:[],status:'standby'};S.agents.set(agentID,a);
-  if(ev.event==='agent_state_changed') {
-    a.operation_state=ev.operation_state;a.active_op_id=ev.active_op_id||'';
-    log(agentID,'info',a.operation_state==='in_operation'?'Agente ocupado':'Agente disponível',ev.op_id);renderAgentList();updatePanel(agentID);return;
+  if (!ev || typeof ev !== 'object' || typeof ev.event !== 'string') { log(null, 'warn', 'Evento SSE em formato inesperado'); return; }
+  if (ev.event === 'sse_connected') return;
+  const id = typeof ev.agent_id === 'string' ? ev.agent_id : null;
+  if (!id) return;
+  const a = S.agents.get(id);
+  if (!a) { if (!S.unknownWarned.has(id)) { S.unknownWarned.add(id); log(null, 'warn', `Evento de agente fora do Registry ignorado: ${cut(id, 40)}`); } return; }
+
+  if (ev.event === 'agent_state_changed') {
+    a.operation_state = str(ev.operation_state); a.active_op_id = str(ev.active_op_id); a.opStateT = Date.now();
+    log(id, 'info', a.operation_state === 'in_operation' ? 'Agente ocupado' : 'Agente disponível', str(ev.op_id) || null); return;
   }
-  if(!S.selected.has(agentID)||typeof ev.op_id!=='string')return;
-  const ps=panelState(agentID),op=ensureOp(agentID,ev.op_id,ev.command||null,ev.args||null),late=op.final;
-  if(TRANSIENT[ev.event])a.status=TRANSIENT[ev.event];
-  if(!late) {
-    if(STAGE[ev.event]){op.stage=STAGE[ev.event];if(ev.event!=='command_created')op.status='running';}
-    if(typeof ev.attempt==='number')op.attempt=ev.attempt;
+  const oid = typeof ev.op_id === 'string' && ev.op_id ? ev.op_id : null;
+  if (!oid) return;
+  const s = ag(id);
+  const op = ensureOp(id, oid, str(ev.command) || null, ev.args && typeof ev.args === 'object' ? ev.args : null);
+  const late = op.final;
+  const tr = EVT_TRANSIENT[ev.event]; if (tr) a.status = tr;
+  if (!late) {
+    const st = EVT_STAGE[ev.event];
+    if (st) { op.stage = st; if (ev.event !== 'command_created') op.status = 'running'; }
+    if (typeof ev.attempt === 'number') op.attempt = ev.attempt;
   }
-  switch(ev.event) {
-    case'command_created':log(agentID,'info',`Operação criada: ${op.cmd||'?'}`,op.id);break;
-    case'wake_sent':if(!late)setFeedback(agentID,'running',`Wake enviado (tentativa ${ev.attempt||1}).`);log(agentID,'info',`Wake #${ev.attempt||1}`,op.id);break;
-    case'auth_ok':if(!late)setFeedback(agentID,'running','Agente autenticado. Enviando Command.');log(agentID,'ok','Autenticação OK',op.id);break;
-    case'command_sent':if(!late)setFeedback(agentID,'running','Command entregue. Aguardando Result.');log(agentID,'info','Command enviado',op.id);break;
-    case'result_received':if(!late)finishResult(agentID,op,ev.stdout,ev.stderr);else log(agentID,'warn','Result duplicado ignorado',op.id);break;
-    case'operation_failed':
-      if(!late){closeOp(op,'failed',REASONS[ev.reason]||ev.reason||'Falha informada pelo Gateway');if(ev.reason==='result_unconfirmed_no_retry'&&op.cmd==='MOVER'){const t=Date.now();ps.motor={cmd:'MOVER',t,until:t+Math.min(estimateMove(op.args),CFG.motorSafetyMs),args:op.args,unconfirmed:true};}setFeedback(agentID,'err',`${capLabel(op.cmd)}: falhou. ${op.reason}`);}log(agentID,'err',`Operação falhou: ${ev.reason||'?'}`,op.id);break;
-    case'command_send_failed':if(!late){closeOp(op,'failed',ev.error||'Falha ao enviar Command');setFeedback(agentID,'err',op.reason);}log(agentID,'err',ev.error||'Falha ao enviar Command',op.id);break;
-    case'wake_failed':case'auth_timeout':case'result_timeout':log(agentID,'warn',`${ev.event}: tentativa ${ev.attempt||1}`,op.id);break;
-    default:log(agentID,'info',`Evento: ${ev.event}`,op.id);
+  const att = str(ev.attempt) || '1';
+  switch (ev.event) {
+    case 'command_created': log(id, 'info', `Operação criada: ${op.cmd || '?'}`, oid); break;
+    case 'wake_sent': if (!late) setFb(id, 'running', `Wake enviado (tentativa ${att}). Aguardando o agente conectar.`); log(id, 'warn', `Wake #${att}`, oid); break;
+    case 'auth_ok': if (!late) setFb(id, 'running', 'Agente autenticado. Enviando comando.'); log(id, 'ok', 'Autenticação OK', oid); break;
+    case 'command_sent': if (!late) setFb(id, 'running', 'Comando entregue ao agente. Aguardando resultado.'); log(id, 'info', 'Comando enviado ao agente', oid); break;
+    case 'result_received': if (!late) finishResult(id, op, ev.stdout, ev.stderr); else log(id, 'warn', 'Resultado duplicado ignorado', oid); break;
+    case 'operation_failed':
+      if (!late) {
+        closeOp(op, 'failed', REASONS[ev.reason] || str(ev.reason) || 'Falha informada pelo Gateway');
+        if (ev.reason === 'result_unconfirmed_no_retry' && op.cmd === 'MOVER') {
+          const t = Date.now(); s.motor = { cmd: 'MOVER', t, until: t + Math.min(estimateMove(op.args), CFG.motorSafetyMs), unconfirmed: true };
+        }
+        setFb(id, 'err', `${capLabel(op.cmd)}: falhou. ${cut(op.reason, 160)}`);
+      }
+      log(id, 'err', `Operação falhou: ${str(ev.reason) || '?'}`, oid); break;
+    case 'command_send_failed':
+      if (!late) { closeOp(op, 'failed', str(ev.error) || 'Falha ao enviar o comando'); setFb(id, 'err', cut(op.reason, 160)); }
+      log(id, 'err', `Falha ao enviar comando: ${cut(ev.error, 100)}`, oid); break;
+    case 'wake_failed': log(id, 'warn', `Wake falhou #${att}: ${cut(ev.error, 100)}`, oid); break;
+    case 'auth_timeout': log(id, 'warn', `Timeout de autenticação #${att}`, oid); break;
+    case 'result_timeout': log(id, 'warn', `Timeout de resultado #${att}`, oid); break;
+    default: log(id, 'info', `Evento: ${cut(ev.event, 40)}`, oid);
   }
-  updateAll();
+  schedule();
 }
-function connectSSE() {
-  const source=new EventSource('/api/events');
-  source.onopen=()=>{S.sse=true;renderConnections();loadAgents();};
-  source.onerror=()=>{S.sse=false;renderConnections();};
-  source.onmessage=e=>{try{handleEvent(JSON.parse(e.data));}catch(err){for(const id of S.selected)log(id,'err','Evento SSE com JSON inválido');updateAll();}};
-}
+
+// ============================================================
+// REGISTRY (polling) E SELEÇÃO
+// ============================================================
 async function loadAgents() {
   try {
-    const response=await fetch('/api/agents',{cache:'no-store'});if(!response.ok)throw new Error('HTTP '+response.status);
-    const list=await response.json();if(!Array.isArray(list))throw new Error('resposta inválida');
-    for(const item of list)if(item&&typeof item.agent_id==='string')S.agents.set(item.agent_id,{...S.agents.get(item.agent_id),...item,capabilities:Array.isArray(item.capabilities)?item.capabilities:[]});
-    S.gw=true;S.lastSync=Date.now();
-    if(!S.selected.size)S.selected.add(validRequestedAgent()||'esp32-03');
-    for(const id of [...S.selected])if(!S.agents.has(id))S.selected.delete(id);
-    renderAgentList();renderPanels();updateAll();
-  }catch(e){S.gw=false;updateAll();}
+    const r = await fetch(`${CFG.api}/api/agents`, { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if (!Array.isArray(data)) throw new Error('resposta inesperada');
+    if (S.gw === false) log(null, 'ok', 'Gateway voltou a responder');
+    S.gw = true; S.gwLast = Date.now();
+    const seen = new Set();
+    for (const it of data) {
+      if (!it || typeof it.agent_id !== 'string') continue;
+      seen.add(it.agent_id);
+      const old = S.agents.get(it.agent_id) || {};
+      const a = { ...old, ...it, capabilities: Array.isArray(it.capabilities) ? it.capabilities.filter(c => typeof c === 'string') : [] };
+      if ('operation_state' in it) a.opStateT = Date.now();
+      else if (old.operation_state === 'in_operation' && Date.now() - (old.opStateT || 0) > CFG.opStateTtlMs) { a.operation_state = ''; a.active_op_id = ''; }
+      S.agents.set(it.agent_id, a);
+    }
+    for (const id of [...S.agents.keys()]) if (!seen.has(id)) { S.agents.delete(id); S.selected.delete(id); }
+    if (!S.loaded) { S.loaded = true; initSelection(); }
+  } catch (e) {
+    if (S.gw !== false) log(null, 'err', 'Falha ao consultar o Gateway: ' + e.message);
+    S.gw = false;
+  }
+  schedule();
 }
-function validRequestedAgent(){return requestedAgent&&/^[A-Za-z0-9_-]{1,32}$/.test(requestedAgent)?requestedAgent:null;}
-function operationChip(a) { const busy=a.operation_state==='in_operation';return h('span',{class:'chip '+(busy?'warn':'ok'),text:busy?'Ocupado':'Disponível'}); }
-function renderAgentList() {
-  const list=$('agent-list');list.replaceChildren(...[...S.agents.values()].sort((a,b)=>a.agent_id.localeCompare(b.agent_id)).map(a=>{
-    const input=h('input',{type:'checkbox','aria-label':`Selecionar ${a.agent_id}`,checked:S.selected.has(a.agent_id),onchange:()=>toggleAgent(a.agent_id,input.checked)});
-    return h('label',{class:'agent-choice'+(S.selected.has(a.agent_id)?' selected':''),'data-agent-choice':a.agent_id},input,h('span',null,h('span',{class:'agent-choice-name',text:a.name||a.agent_id}),h('span',{class:'agent-choice-id',text:a.agent_id}),h('div',null,operationChip(a))));
+function initSelection() {
+  const want = [];
+  const q = new URLSearchParams(location.search).get('agent');
+  if (q && /^[A-Za-z0-9_-]{1,32}$/.test(q) && S.agents.has(q)) want.push(q);
+  if (!want.length) {
+    try { const j = JSON.parse(sessionStorage.getItem('tunneus.selected') || '[]'); if (Array.isArray(j)) for (const id of j) if (typeof id === 'string' && S.agents.has(id)) want.push(id); } catch (e) { /* sem storage */ }
+  }
+  if (!want.length) { if (S.agents.has(CFG.defaultAgent)) want.push(CFG.defaultAgent); else { const f = agentList()[0]; if (f) want.push(f.agent_id); } }
+  want.forEach(id => S.selected.add(id));
+}
+function saveSelection() { try { sessionStorage.setItem('tunneus.selected', JSON.stringify([...S.selected])); } catch (e) { /* ignora */ } }
+function toggleAgent(id, on) {
+  if (on) S.selected.add(id); else S.selected.delete(id);
+  saveSelection();
+  if (on && S.view !== 'panels') showView('panels');
+  for (const s of S.st.values()) s.chartsDirty = true;
+  schedule();
+}
+function openAgent(id) { S.selected.add(id); saveSelection(); showView('panels'); schedule(); }
+
+// ============================================================
+// RENDER
+// ============================================================
+function renderAll() {
+  renderHead(); renderRail(); renderFilters(); renderNavBadges();
+  if (S.view === 'overview') renderOverview();
+  else if (S.view === 'panels') renderPanels();
+  else if (S.view === 'ops') renderOps();
+  else if (S.view === 'events') renderLog();
+}
+function renderHead() {
+  const gw = $('gw-dot'), gt = $('gw-text');
+  if (S.gw === null) { gw.className = 'dot'; gt.textContent = 'Gateway: verificando'; }
+  else if (S.gw) { gw.className = 'dot ok'; gt.textContent = 'Gateway: respondendo'; }
+  else { gw.className = 'dot err'; gt.textContent = 'Gateway: sem resposta'; }
+  $('sse-dot').className = 'dot ' + (S.sse ? 'ok' : 'warn');
+  $('sse-text').textContent = S.sse ? 'SSE: conectado' : 'SSE: desconectado';
+  $('foot-sync').textContent = S.gwLast ? `Registry consultado às ${fmtTime(S.gwLast)}` : 'Sem dados do Gateway';
+  $('foot-agents').textContent = `${S.agents.size} agente${S.agents.size === 1 ? '' : 's'} · ${S.selected.size} selecionado${S.selected.size === 1 ? '' : 's'}`;
+}
+function chip(cls, text) { return h('span', { class: 'chip ' + cls, text }); }
+function stateDot(a) { const st = stateInfo(a); return h('span', { class: 'state-line ' + st.c, title: st.d || st.t }, h('span', { class: 'dot ' + st.c }), h('span', { text: st.t })); }
+
+// ----- trilho: seleção de agentes -----
+function buildRow(a) {
+  const id = a.agent_id;
+  const input = h('input', { type: 'checkbox', 'data-sel': id, 'aria-label': `Abrir painel de ${id}`, onchange: () => toggleAgent(id, input.checked) });
+  return h('label', { class: 'agent-row', 'data-agent': id, title: `${id} · ${str(a.type) || 'tipo n/d'}${str(a.description) ? ' · ' + str(a.description) : ''}` }, input,
+    h('span', { class: 'ar-name', 'data-f': 'name' }),
+    h('span', { class: 'dot muted', 'data-f': 'dot' }));
+}
+function renderRail() {
+  const list = $('agent-list'), ids = agentList();
+  const key = ids.map(a => a.agent_id).join('|');
+  if (list.dataset.key !== key) { list.dataset.key = key; list.replaceChildren(...ids.map(buildRow)); }
+  $('agent-empty').classList.toggle('hidden', ids.length > 0);
+  $('agent-empty').textContent = S.loaded ? 'Nenhum agente no Registry.' : (S.gw === false ? 'Gateway sem resposta.' : 'Carregando…');
+  for (const a of ids) {
+    const row = list.querySelector(`[data-agent="${CSS.escape(a.agent_id)}"]`); if (!row) continue;
+    const sel = S.selected.has(a.agent_id);
+    row.classList.toggle('selected', sel);
+    const input = row.querySelector('input'); if (input.checked !== sel) input.checked = sel;
+    row.querySelector('[data-f="name"]').textContent = str(a.name) || a.agent_id;
+    const st = stateInfo(a), busy = busyAny(a.agent_id);
+    row.querySelector('[data-f="dot"]').className = 'dot ' + (busy ? 'warn' : st.c);
+    row.querySelector('[data-f="dot"]').title = busy ? 'Ocupado' : (st.d || st.t);
+  }
+}
+function renderFilters() {
+  const ids = agentList().map(a => a.agent_id), key = ids.join('|');
+  for (const sel of document.querySelectorAll('[data-flt]')) {
+    if (sel.dataset.key !== key) {
+      sel.dataset.key = key;
+      sel.replaceChildren(h('option', { value: '', text: 'Todos' }), ...ids.map(id => h('option', { value: id, text: id })));
+      sel.onchange = () => { S.filter = sel.value; for (const o of document.querySelectorAll('[data-flt]')) o.value = S.filter; S.sig = {}; schedule(); };
+    }
+    if (sel.value !== S.filter) sel.value = S.filter;
+  }
+}
+function renderNavBadges() {
+  const sb = document.querySelector('[data-badge="panels"]'); if (sb) sb.textContent = S.selected.size ? String(S.selected.size) : '';
+  let act = 0; for (const s of S.st.values()) if (activeOp(s)) act++;
+  const ob = document.querySelector('[data-badge="ops"]'); if (ob) ob.textContent = act ? `${act} ativa${act > 1 ? 's' : ''}` : '';
+}
+
+// ----- visão geral -----
+function opSummary(op) {
+  const a = op.args && typeof op.args === 'object' ? op.args : null;
+  return a && ('steps' in a || 'dir' in a) ? `${op.cmd} (${str(a.steps)} passos, ${str(a.dir)}, ${str(a.speed)})` : str(op.cmd) || '?';
+}
+const STATUS_UI = { accepted: ['Aceito (HTTP 202)', 'info'], running: ['Em andamento', 'act'], confirmed: ['Confirmado', 'ok'], failed: ['Falhou', 'err'], rejected: ['Recusado pela API', 'err'], unknown: ['Sem confirmação', 'warn'] };
+function kvItem(label, value) { return h('div', { class: 'kv-item' }, h('span', { class: 'kv-label', text: label }), h('span', { class: 'kv-value' }, value)); }
+function tlClasses(op) {
+  const idx = op ? PHASES.findIndex(p => p[0] === op.stage) : -1;
+  const failed = op && (op.status === 'failed' || op.status === 'rejected');
+  return PHASES.map((p, i) => {
+    if (!op || op.status === 'rejected') return '';
+    if (i < idx) return 'done';
+    if (i === idx) return op.status === 'confirmed' ? 'done' : failed ? 'fail' : 'on';
+    return '';
+  });
+}
+function renderOverview() {
+  const agents = agentList(), ops = [];
+  for (const s of S.st.values()) for (const id of s.order) { const o = s.ops.get(id); if (o) ops.push(o); }
+  const n = st => ops.filter(o => o.status === st).length;
+  const li = latestOp();
+  const attn = [];
+  if (S.gw === false) attn.push(['err', 'O Gateway não está respondendo. Os dados exibidos podem estar desatualizados.']);
+  if (!S.sse) attn.push(['warn', 'SSE desconectado: eventos e resultados em tempo real não chegam até reconectar.']);
+  if (S.loaded && !agents.length) attn.push(['err', 'Nenhum agente registrado.']);
+  const unreachable = agents.filter(a => str(a.status) === 'unreachable').map(a => agentName(a.agent_id));
+  if (unreachable.length) attn.push(['warn', `Sem resposta desde a última tentativa: ${unreachable.join(', ')}`]);
+  for (const a of agents) {
+    const s = ag(a.agent_id), nm = agentName(a.agent_id), lo = lastOp(s);
+    if (isBusy(a.agent_id)) attn.push(['info', `${nm}: ocupado com outra operação.`]);
+    if (lo && (lo.status === 'failed' || lo.status === 'rejected')) attn.push(['err', `${nm}: última operação (${capLabel(lo.cmd)}) falhou: ${cut(lo.reason, 110)}`]);
+    if (lo && lo.status === 'unknown') attn.push(['warn', `${nm}: a operação ${capLabel(lo.cmd)} ficou sem confirmação final.`]);
+    if (motorRunning(s)) attn.push(['warn', `${nm}: ${s.motor.cmd} confirmado às ${fmtTime(s.motor.t)}; o motor pode ainda estar em movimento.`]);
+    if (!a.capabilities.length) attn.push(['info', `${nm}: sem capabilities no Registry; nenhum comando disponível.`]);
+  }
+  const counts = {}; for (const a of agents) { const t = stateInfo(a).t; counts[t] = (counts[t] || 0) + 1; }
+  const data = {
+    k: [agents.length, ops.length, n('confirmed'), n('failed') + n('rejected'), n('unknown')],
+    counts, attn,
+    tl: li ? [li.id, li.op.id, li.op.cmd, li.op.t0, li.op.attempt, tlClasses(li.op)] : null,
+    rows: agents.map(a => [a.agent_id, a.name, a.type, a.description, stateInfo(a).t, stateInfo(a).c, a.capabilities.length, isBusy(a.agent_id), S.selected.has(a.agent_id)]),
+    loaded: S.loaded
+  };
+  if (sigSkip('ov', data)) return;
+
+  const parts = [`${agents.length} agente${agents.length === 1 ? '' : 's'}`];
+  for (const [t, c] of Object.entries(counts)) parts.push(`${c} ${t}`);
+  if (ops.length) parts.push(`${ops.length} operaç${ops.length === 1 ? 'ão' : 'ões'} · ${n('confirmed')} confirmada${n('confirmed') === 1 ? '' : 's'}`, `${n('failed') + n('rejected')} falha${n('failed') + n('rejected') === 1 ? '' : 's'}`);
+  $('ov-summary').textContent = parts.join(' · ');
+  $('ov-attn-panel').classList.toggle('hidden', attn.length === 0);
+  $('ov-attn').replaceChildren(...attn.map(([c, m]) => h('li', { class: c, text: m })));
+  $('ov-tl-panel').classList.toggle('hidden', !li);
+  if (li) {
+    $('tl-caption').textContent = `${agentName(li.id)} · ${capLabel(li.op.cmd)} · ${fmtTime(li.op.t0)}${li.op.attempt > 1 ? ' · tentativa ' + li.op.attempt : ''}`;
+    const cls = tlClasses(li.op);
+    $('tl').replaceChildren(...PHASES.map(([, label], i) => h('div', { class: 'tl-step ' + cls[i], role: 'listitem' }, h('div', { class: 'tl-circle' }), h('span', { class: 'tl-label', text: label }))));
+  }
+
+  const tb = $('ov-agents').querySelector('tbody');
+  $('ov-agents-empty').classList.toggle('hidden', agents.length > 0);
+  tb.replaceChildren(...agents.map(a => {
+    const id = a.agent_id;
+    return h('tr', { style: 'cursor:pointer', title: `${id}${str(a.description) ? ' · ' + str(a.description) : ''}`, onclick: () => openAgent(id) },
+      h('td', null, h('span', { style: 'font-weight:600', text: str(a.name) || id }), h('span', { class: 'mono tiny faint', text: ' · ' + id })),
+      h('td', { class: 'dim', text: str(a.type) || '—' }),
+      h('td', null, stateDot(a), isBusy(id) ? ' ' : null, isBusy(id) ? h('span', { class: 'state-line warn' }, h('span', { class: 'dot warn' }), h('span', { text: 'ocupado' })) : null),
+      h('td', { class: 'mono', text: String(a.capabilities.length) }),
+      h('td', null, h('button', { type: 'button', class: 'btn sm', onclick: e => { e.stopPropagation(); openAgent(id); }, text: S.selected.has(id) ? 'Ir ao painel' : 'Abrir painel' })));
   }));
 }
-function toggleAgent(agentID,selected) { if(selected){S.selected.add(agentID);panelState(agentID);}else S.selected.delete(agentID);renderAgentList();renderPanels();updateAll(); }
-function renderConnections() {
-  $('gw-dot').className='dot '+(S.gw===true?'ok':S.gw===false?'err':'');$('gw-text').textContent='Gateway: '+(S.gw===true?'respondendo':S.gw===false?'sem resposta':'verificando');
-  $('sse-dot').className='dot '+(S.sse?'ok':'warn');$('sse-text').textContent='SSE: '+(S.sse?'conectado':'desconectado');$('sync').textContent=S.lastSync?'Registry às '+fmtTime(S.lastSync):'';
+
+// ----- painéis por agente -----
+function renderPanels() {
+  const ids = agentList().map(a => a.agent_id).filter(id => S.selected.has(id));
+  $('panels-empty').classList.toggle('hidden', ids.length > 0);
+  for (const id of [...S.panels.keys()]) if (!ids.includes(id)) S.panels.delete(id);
+  let reorder = false;
+  for (const id of ids) {
+    const a = S.agents.get(id), key = a.capabilities.join('');
+    const p = S.panels.get(id);
+    if (!p || p.key !== key) { S.panels.set(id, { el: buildPanel(a), key }); reorder = true; ag(id).chartsDirty = true; }
+  }
+  const order = ids.join('|');
+  if (reorder || $('panels').dataset.order !== order) { $('panels').dataset.order = order; $('panels').replaceChildren(...ids.map(id => S.panels.get(id).el)); }
+  for (const id of ids) updatePanel(id);
 }
 function buildPanel(a) {
-  const id=a.agent_id,ps=panelState(id),panel=h('article',{class:'agent-panel',id:'panel-'+id,'data-agent':id});
-  const head=h('div',{class:'panel-head'},h('div',null,h('div',{class:'panel-title',text:a.name||id}),h('div',{class:'panel-id',text:id}),h('div',{class:'tiny faint',text:a.description||''})),h('div',{class:'stack'},operationChip(a),h('span',{class:'chip info','data-f':'connectivity',text:a.status||'standby'})));
-  const feedback=h('div',{class:'feedback','data-f':'feedback',role:'status','aria-live':'polite'},h('div',{class:'feedback-row'},h('span',{'data-f':'feedback-text'}),h('button',{type:'button',class:'btn sm hidden','data-f':'retry',onclick:()=>{const r=ps.retry;if(r)sendCommand(id,r.cmd,r.args);}},'Tentar novamente')));
-  const timeline=h('div',{class:'timeline','data-f':'timeline',role:'list','aria-label':'Fases da operação'},PHASES.map(([key,label])=>h('div',{class:'phase','data-phase':key,role:'listitem'},h('span',{class:'phase-dot'}),label)));
-  const result=h('div',null,h('div',{class:'section-title'},'Último Result'),h('div',{class:'result','data-f':'result',text:'Nenhum Result nesta guia.'}),h('div',{class:'kv',style:'margin-top:8px'},h('div',{class:'kv-item'},h('span',{class:'kv-label'},'Duração'),h('span',{class:'kv-value','data-f':'duration'},'—')),h('div',{class:'kv-item'},h('span',{class:'kv-label'},'Operação'),h('span',{class:'kv-value','data-f':'op-id'},'—')),h('div',{class:'kv-item'},h('span',{class:'kv-label'},'Fase'),h('span',{class:'kv-value','data-f':'phase'},'—'))));
-  const commands=h('div',null,h('div',{class:'section-title'},'Comandos'),h('div',{class:'commands','data-f':'commands'},...(a.capabilities||[]).filter(c=>!SENSOR_CAPS.has(c)&&!MOTOR_CAPS.has(c)).map(c=>commandButton(id,c))));
-  panel.append(head,h('div',{class:'panel-body'},feedback,timeline,result,commands));
-  const body=panel.querySelector('.panel-body');
-  if((a.capabilities||[]).some(c=>SENSOR_CAPS.has(c)))body.append(buildSensors(id));
-  if((a.capabilities||[]).some(c=>MOTOR_CAPS.has(c)))body.append(buildMotor(id));
-  body.append(buildHistory(id));return panel;
+  const id = a.agent_id, s = ag(id), caps = a.capabilities;
+  const hasSensors = caps.some(c => SENSOR_CAPS.has(c)), hasMotor = caps.some(c => MOTOR_CAPS.has(c)), hasLeds = caps.some(c => LED_CAPS.has(c));
+  const generic = caps.filter(c => !SENSOR_CAPS.has(c) && !MOTOR_CAPS.has(c) && !LED_CAPS.has(c));
+  const body = h('div', { class: 'ap-body' });
+  body.append(
+    h('div', { class: 'feedback', 'data-f': 'fb', role: 'status', 'aria-live': 'polite' }, h('span', { class: 'fb-text', 'data-f': 'fb-text' }),
+      h('button', { type: 'button', class: 'btn sm hidden', 'data-f': 'retry', onclick: () => { const r = s.retry; if (r) sendCmd(id, r.cmd, r.args); } }, 'Tentar novamente')),
+    h('div', { class: 'grid-2' },
+      h('div', null, h('div', { class: 'sec-title', text: 'Pico de Conexão' }), h('div', { class: 'tl', 'data-f': 'tl', role: 'list', 'aria-label': 'Etapas da operação' }, PHASES.map(([, l]) => h('div', { class: 'tl-step', role: 'listitem' }, h('div', { class: 'tl-circle' }), h('span', { class: 'tl-label', text: l }))))),
+      h('div', null, h('div', { class: 'sec-title', text: 'Último resultado' }), h('div', { class: 'result', 'data-f': 'result', text: 'Nenhum resultado nesta sessão.' }),
+        h('div', { class: 'kv', style: 'margin-top:8px' }, kvItem('Duração', h('span', { 'data-f': 'dur', text: '—' })), kvItem('Etapa', h('span', { 'data-f': 'stage', text: '—' })), kvItem('Operação', h('span', { class: 'mono', 'data-f': 'opid', text: '—' }))))));
+
+  if (generic.length) body.append(h('section', null, h('div', { class: 'sec-title', text: 'Comandos' }),
+    h('div', { class: 'commands' }, generic.map(c => h('button', { type: 'button', class: 'btn', 'data-command': c, onclick: () => sendCmd(id, c), text: capLabel(c) })))));
+  if (hasSensors) body.append(buildSensors(id, s));
+  if (hasMotor) body.append(buildMotor(id, s, caps));
+  if (hasLeds) body.append(buildLeds(id, caps));
+  if (!generic.length && !hasSensors && !hasMotor && !hasLeds) body.append(h('div', { class: 'empty-plain', text: 'Este agente não tem capabilities cadastradas no Registry. Nenhum comando disponível.' }));
+
+  body.append(h('div', null,
+    h('details', null, h('summary', { text: 'Operações deste agente' }), h('div', { class: 'table-wrap', style: 'margin-top:8px' }, h('table', null, h('thead', null, h('tr', null, ['Horário', 'Comando', 'Estado', 'Duração', 'Resultado'].map(t => h('th', { text: t })))), h('tbody', { 'data-f': 'ops' })))),
+    h('details', { style: 'margin-top:8px' }, h('summary', { text: 'Eventos deste agente' }), h('div', { class: 'log mini', 'data-f': 'log' }))));
+
+  return h('article', { class: 'agent-panel', 'data-agent': id, 'aria-label': `Painel de ${str(a.name) || id}` },
+    h('div', { class: 'ap-head' },
+      h('div', { style: 'min-width:0' }, h('div', { class: 'ap-title', 'data-f': 'title' }), h('div', { class: 'ap-id', text: `${id} · ${str(a.type) || 'tipo n/d'}` }), h('div', { class: 'tiny faint', 'data-f': 'desc' })),
+      h('div', { class: 'ap-chips', 'data-f': 'chips' })),
+    body);
 }
-function commandButton(agentID,cmd,args) { return h('button',{type:'button',class:'btn sm','data-command':cmd,onclick:()=>sendCommand(agentID,cmd,args)},capLabel(cmd)); }
-function buildSensors(agentID) {
-  const root=h('section',{class:'sensor-section'},h('div',{class:'section-title'},'Sensores · leituras sob demanda'),h('div',{class:'commands',style:'margin-bottom:9px'},commandButton(agentID,'LER_SENSORES')));
-  const charts=h('div',{class:'charts'},QTY.map(q=>h('article',{class:'chart-card','data-q':q.id},h('div',{class:'chart-head'},h('span',{class:'chart-name',text:q.name}),commandButton(agentID,q.cap)),h('div',{class:'chart-value'},h('span',{'data-f':'value'},'—'),' ',h('span',{class:'chart-unit',text:q.unit})),h('div',{class:'chart-meta','data-f':'sample-state'},'Sem amostras'),h('div',{class:'chart-plot','data-f':'plot'}))));root.append(charts);return root;
+function buildSensors(id, s) {
+  const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Janela de tempo' });
+  WINDOWS.forEach((w, i) => seg.append(h('button', { type: 'button', 'aria-pressed': w.ms === s.win ? 'true' : 'false', onclick: () => { s.win = w.ms; [...seg.children].forEach((b, j) => b.setAttribute('aria-pressed', j === i ? 'true' : 'false')); s.chartsDirty = true; schedule(); }, text: w.label })));
+  return h('section', { 'data-f': 'sensors' },
+    h('div', { class: 'sec-head' }, h('span', { class: 'sec-title', text: 'Monitoramento de sensores' }),
+      h('div', { class: 'row' }, seg, h('button', { type: 'button', class: 'btn primary sm', 'data-command': 'LER_SENSORES', onclick: () => sendCmd(id, 'LER_SENSORES'), text: 'Ler todos os sensores' }))),
+    h('p', { class: 'tiny faint', style: 'margin-bottom:10px', text: 'Leituras sob demanda: cada botão dispara uma operação completa (Wake, autenticação, comando, resultado); não há leitura automática. O horário da amostra é o do recebimento no navegador. O histórico fica em memória e some ao recarregar a página.' }),
+    h('div', { class: 'charts' }, QTY.map(q => h('article', { class: 'chart-card', 'data-q': q.id, 'aria-label': q.name },
+      h('div', { class: 'cc-head' }, h('div', null, h('div', { class: 'cc-name', text: q.name }), h('div', { class: 'cc-sensor', text: q.sensor })),
+        h('button', { type: 'button', class: 'btn sm', 'data-command': q.cap, onclick: () => sendCmd(id, q.cap), text: 'Ler' })),
+      h('div', { class: 'cc-value' }, h('span', { class: 'cc-num muted', 'data-f': 'num', text: '—' }), h('span', { class: 'cc-unit', text: q.unit })),
+      h('div', { class: 'cc-meta' }, h('span', { 'data-f': 'state' }), h('span', { 'data-f': 'time' })),
+      h('div', { class: 'cc-plot', 'data-f': 'plot' }, h('div', { class: 'plot-empty', 'data-f': 'empty' })),
+      h('div', { class: 'cc-foot', 'data-f': 'foot' })))));
 }
-function buildMotor(agentID) {
-  const ps=panelState(agentID),root=h('section',{class:'motor'},h('div',{class:'section-title'},'Motor de passo'),h('div',{class:'motor-controls'},h('button',{type:'button',class:'btn sm','data-command':'START',onclick:()=>onMotor(agentID,'START')},'Iniciar motor'),commandButton(agentID,'PARE')));
-  const controls=root.querySelector('.motor-controls');
-  const dir=h('select',{class:'input','data-f':'dir','aria-label':'Direção'},h('option',{value:'direita'},'Direita'),h('option',{value:'esquerda'},'Esquerda'));
-  const speed=h('select',{class:'input','data-f':'speed','aria-label':'Velocidade'},h('option',{value:'lenta'},'Lenta'),h('option',{value:'normal'},'Normal'),h('option',{value:'rapida'},'Rápida'));
-  const steps=h('input',{class:'input','data-f':'steps',type:'number',min:'1',max:'30000',step:'1',value:String(ps.move.steps),'aria-label':'Passos'});
-  dir.value=ps.move.dir;speed.value=ps.move.speed;
-  dir.onchange=()=>{ps.move.dir=dir.value;disarm(agentID);};speed.onchange=()=>{ps.move.speed=speed.value;disarm(agentID);};
-  steps.oninput=()=>{ps.move.steps=Number(steps.value);disarm(agentID);updatePanel(agentID);};
-  controls.append(h('div',{class:'field'},h('label',{text:'Direção'}),dir),h('div',{class:'field'},h('label',{text:'Passos'}),steps),h('div',{class:'field'},h('label',{text:'Velocidade'}),speed),h('button',{type:'button',class:'btn primary','data-f':'mover',onclick:()=>onMotor(agentID,'MOVER')},'Executar movimento'));
-  root.append(h('p',{class:'motor-note','data-f':'motor-note'}),h('p',{class:'motor-note'},'START e MOVER exigem dois cliques. Result confirma o comando, não a parada física do motor. PARE também é recusado se o agente estiver ocupado.'));return root;
+function buildMotor(id, s, caps) {
+  const hasMove = caps.includes('MOVER');
+  const dirSeg = h('div', { class: 'seg', role: 'group', 'aria-labelledby': 'dl-' + id }), spdSeg = h('div', { class: 'seg', role: 'group', 'aria-labelledby': 'sl-' + id });
+  const mkSeg = (seg, field, opts) => opts.forEach(([v, label]) => seg.append(h('button', { type: 'button', 'data-v': v, disabled: !hasMove, 'aria-pressed': s.move[field] === v ? 'true' : 'false',
+    onclick: () => { s.move[field] = v; [...seg.children].forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false')); disarm(id); } , text: label })));
+  mkSeg(dirSeg, 'dir', [['direita', 'Direita'], ['esquerda', 'Esquerda']]);
+  mkSeg(spdSeg, 'speed', [['lenta', 'Lenta'], ['normal', 'Normal'], ['rapida', 'Rápida']]);
+  const steps = h('input', { class: 'input', type: 'number', id: 'st-' + id, min: '1', max: String(CFG.maxSteps), step: '1', value: String(s.move.steps), disabled: !hasMove, oninput: () => { s.move.steps = steps.value === '' ? NaN : Number(steps.value); disarm(id); schedule(); } });
+  return h('section', { 'data-f': 'motor' },
+    h('div', { class: 'sec-head' }, h('span', { class: 'sec-title', text: 'Acionamentos — motor de passo' }), h('span', { class: 'chip muted', 'data-f': 'motor-chip', text: 'Sem confirmação' })),
+    h('div', { class: 'motor-grid' },
+      h('div', { class: 'stack' },
+        h('div', { class: 'field' }, h('span', { class: 'lbl', text: 'Comandos do firmware' }),
+          h('div', { class: 'row' },
+            h('button', { type: 'button', class: 'btn primary', 'data-command': 'START', onclick: () => onMotor(id, 'START'), text: 'Iniciar motor (START)' }),
+            h('button', { type: 'button', class: 'btn danger', 'data-command': 'PARE', onclick: () => onMotor(id, 'PARE'), text: 'Parar motor (PARE)' }))),
+        h('p', { class: 'small dim', 'data-f': 'motor-status' }),
+        h('p', { class: 'tiny faint', text: 'O resultado confirma o comando, não a parada física do motor. O dashboard apenas envia comandos pelo Gateway; não controla GPIOs. START e MOVER exigem dois cliques.' })),
+      h('div', { class: 'pending-box' + (hasMove ? ' live' : ''), 'aria-label': 'Parâmetros do movimento' },
+        h('div', { class: 'row' }, hasMove ? chip('act', 'MOVER disponível') : chip('warn', 'Aguardando contrato'), h('span', { class: 'tiny faint', text: hasMove ? 'Envia {cmd:"MOVER", args:{dir, steps, speed}}' : 'Desabilitado: MOVER não consta no Registry deste agente' })),
+        h('div', { class: 'field' }, h('span', { class: 'lbl', id: 'dl-' + id, text: 'Direção' }), dirSeg),
+        h('div', { class: 'field' }, h('label', { for: 'st-' + id, text: 'Passos' }), steps),
+        h('div', { class: 'field' }, h('span', { class: 'lbl', id: 'sl-' + id, text: 'Velocidade' }), spdSeg),
+        h('button', { type: 'button', class: 'btn', 'data-command': 'MOVER', onclick: () => onMotor(id, 'MOVER'), text: 'Executar movimento' }))));
 }
-function buildHistory(agentID) {
-  const table=h('div',{class:'table-wrap'},h('table',null,h('thead',null,h('tr',null,h('th',null,'Comando'),h('th',null,'Estado'),h('th',null,'Duração'),h('th',null,'Resultado'))),h('tbody',{'data-f':'ops'})));
-  const logEl=h('div',{class:'log','data-f':'log'});return h('div',null,h('details',null,h('summary',null,'Operações desta guia'),table),h('details',null,h('summary',null,'Eventos deste agente'),logEl));
+
+function buildLeds(id, caps) {
+  const rows = LED_CORES.map(([cor, label, color]) => h('div', { class: 'row', style: 'justify-content:space-between;flex-wrap:nowrap' },
+    h('span', { class: 'state-line' }, h('span', { class: 'dot', 'data-led-dot': cor, style: 'background:' + color + ';opacity:.25' }), h('span', { text: label })),
+    h('span', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' },
+      caps.includes('LIGAR_LED') ? h('button', { type: 'button', class: 'btn sm', 'data-led-cmd': 'LIGAR_LED', 'data-cor': cor, onclick: () => sendCmd(id, 'LIGAR_LED', { cor }), text: 'Ligar' }) : null,
+      caps.includes('DESLIGAR_LED') ? h('button', { type: 'button', class: 'btn sm', 'data-led-cmd': 'DESLIGAR_LED', 'data-cor': cor, onclick: () => sendCmd(id, 'DESLIGAR_LED', { cor }), text: 'Desligar' }) : null)));
+  return h('section', { 'data-f': 'leds' },
+    h('div', { class: 'sec-head' }, h('span', { class: 'sec-title', text: 'LEDs — vermelho / amarelo / verde' }),
+      caps.includes('ESTADO_LEDS') ? h('button', { type: 'button', class: 'btn sm', 'data-command': 'ESTADO_LEDS', onclick: () => sendCmd(id, 'ESTADO_LEDS'), text: 'Consultar estado' }) : null),
+    h('div', { class: 'stack', style: 'gap:8px' }, rows),
+    h('p', { class: 'tiny faint', 'data-f': 'leds-note', text: 'Estado desconhecido. Use "Consultar estado". Os LEDs mantêm o estado após o fim da sessão.' }));
 }
-function renderPanels() {
-  const ids=[...S.selected].filter(id=>S.agents.has(id)).sort();
-  const key=ids.map(id=>{const a=S.agents.get(id);return id+':'+(a.capabilities||[]).join(',');}).join('|');if(key===S.structureKey)return;S.structureKey=key;
-  $('panels').replaceChildren(...ids.map(id=>buildPanel(S.agents.get(id))));$('empty').classList.toggle('hidden',ids.length>0);
-}
-function updateAll() { renderConnections();for(const id of S.selected)updatePanel(id); }
-function updatePanel(agentID) {
-  const panel=$('panel-'+agentID);if(!panel)return;const a=S.agents.get(agentID),ps=panelState(agentID),busy=a.operation_state==='in_operation';
-  panel.classList.toggle('busy',busy);const chip=panel.querySelector('.panel-head .chip');chip.className='chip '+(busy?'warn':'ok');chip.textContent=busy?'Ocupado':'Disponível';
-  field(panel,'connectivity').textContent=a.status||'standby';
-  const fb=field(panel,'feedback');fb.className='feedback '+ps.feedback.kind;field(panel,'feedback-text').textContent=ps.feedback.text;
-  const retry=field(panel,'retry');retry.classList.toggle('hidden',!ps.retry);retry.disabled=!ps.retry||!canSend(agentID,ps.retry.cmd);retry.title=retry.disabled?'Agente ainda ocupado ou operação ativa':'Enviar uma nova tentativa manual';
-  for(const button of panel.querySelectorAll('[data-command]')){const cmd=button.dataset.command;button.disabled=!canSend(agentID,cmd);button.title=button.disabled?disabledReason(agentID,cmd):'';if(cmd==='START'){const armed=ps.armedCmd==='START';button.textContent=armed?'Confirmar START':'Iniciar motor';button.classList.toggle('armed',armed);}}
-  const op=lastOp(ps),idx=op?PHASES.findIndex(p=>p[0]===op.stage):-1,failed=op&&(op.status==='failed'||op.status==='rejected');
-  for(const phase of panel.querySelectorAll('[data-phase]')){const i=PHASES.findIndex(p=>p[0]===phase.dataset.phase);let cls='phase';if(op&&op.status!=='rejected'){if(i<idx)cls+=' done';else if(i===idx)cls+=op.status==='confirmed'?' done':failed?' fail':' on';}phase.className=cls;}
-  field(panel,'result').textContent=op?(op.status==='confirmed'?op.stdout:op.reason||op.stderr||op.status):'Nenhum Result nesta guia.';
-  field(panel,'duration').textContent=op&&op.tEnd?fmtDuration(op.tEnd-op.t0):'—';field(panel,'op-id').textContent=op&&!op.id.startsWith('local-')?op.id:'—';field(panel,'phase').textContent=op?op.stage:'—';
-  updateCommands(panel,agentID);updateCharts(panel,agentID);updateMotor(panel,agentID);updateHistory(panel,agentID);
-}
-function updateCommands(panel,agentID) {
-  const ps=panelState(agentID),mover=field(panel,'mover');if(!mover)return;
-  const args=moveArgs(agentID),armed=ps.armedCmd==='MOVER';mover.textContent=armed?'Confirmar movimento':'Executar movimento';mover.classList.toggle('armed',armed);mover.disabled=!canSend(agentID,'MOVER')||!!args.err;mover.title=args.err||disabledReason(agentID,'MOVER');
-}
-function moveArgs(agentID) { const m=panelState(agentID).move;if(!Number.isInteger(m.steps)||m.steps<1||m.steps>30000)return{err:'Passos deve ser um inteiro entre 1 e 30000.'};return{dir:m.dir,steps:m.steps,speed:m.speed}; }
-function estimateMove(args) { const us={lenta:800,normal:400,rapida:200}[args?.speed];return us&&args?.steps?args.steps*2*us/1000:0; }
-function onMotor(agentID,cmd) {
-  const ps=panelState(agentID);let args=null;if(cmd==='MOVER'){args=moveArgs(agentID);if(args.err){setFeedback(agentID,'err',args.err);updatePanel(agentID);return;}}
-  if(cmd==='START'||cmd==='MOVER') {
-    const now=Date.now();if(ps.armedCmd===cmd&&now-ps.armedAt<CFG.armMs){disarm(agentID);sendCommand(agentID,cmd,args);return;}
-    ps.armedCmd=cmd;ps.armedAt=now;clearTimeout(ps.armTimer);ps.armTimer=setTimeout(()=>{disarm(agentID);updatePanel(agentID);},CFG.armMs);setFeedback(agentID,'warn',cmd==='MOVER'?`Confirme o movimento: ${args.steps} passos, ${args.dir}, ${args.speed}.`:'Clique novamente para confirmar START.');updatePanel(agentID);return;
+
+function updatePanel(id) {
+  const p = S.panels.get(id); if (!p) return;
+  const el = p.el, a = S.agents.get(id), s = ag(id); if (!a) return;
+  const f = n => el.querySelector(`[data-f="${n}"]`);
+  el.classList.toggle('busy', busyAny(id));
+  f('title').textContent = str(a.name) || id;
+  f('desc').textContent = str(a.description);
+  const csig = stateInfo(a).t + '|' + busyAny(id);
+  if (f('chips').dataset.sig !== csig) { f('chips').dataset.sig = csig; f('chips').replaceChildren(...[stateDot(a), busyAny(id) ? chip('warn', 'Ocupado') : null].filter(Boolean)); }
+
+  const fb = f('fb'); fb.className = 'feedback ' + s.fb.cls;
+  const fbt = f('fb-text'), want = s.fb.text;
+  if (fbt.textContent !== want) fbt.textContent = want;
+  const spin = fb.querySelector('.spinner'), need = s.fb.cls === 'pending' || s.fb.cls === 'running';
+  if (need && !spin) fb.prepend(h('div', { class: 'spinner', 'aria-hidden': 'true' })); else if (!need && spin) spin.remove();
+  const retry = f('retry'); retry.classList.toggle('hidden', !s.retry); retry.disabled = !s.retry || !canSend(id, s.retry.cmd);
+  retry.title = retry.disabled ? 'Agente ainda ocupado ou operação ativa' : 'Enviar uma nova tentativa manual';
+
+  const hasMove = a.capabilities.includes('MOVER'), margs = moveArgs(id);
+  for (const b of el.querySelectorAll('[data-command]')) {
+    const cmd = b.dataset.command;
+    let off = !canSend(id, cmd), why = off ? disabledReason(id, cmd) : '';
+    if (cmd === 'MOVER' && !off && margs.err) { off = true; why = margs.err; }
+    b.disabled = off; b.title = why;
+    if (cmd === 'START') { const arm = s.armed === 'START'; b.textContent = arm ? 'Confirmar START' : 'Iniciar motor (START)'; b.classList.toggle('armed', arm); }
+    if (cmd === 'MOVER') { const arm = s.armed === 'MOVER'; b.textContent = arm ? 'Confirmar movimento' : 'Executar movimento'; b.classList.toggle('armed', arm); }
   }
-  sendCommand(agentID,cmd);
+  const op = lastOp(s), cls = tlClasses(op);
+  [...f('tl').children].forEach((c, i) => { c.className = 'tl-step ' + cls[i]; });
+  f('result').textContent = op ? (op.status === 'confirmed' ? op.stdout : (op.reason || op.stderr || (STATUS_UI[op.status] || [op.status])[0])) : 'Nenhum resultado nesta sessão.';
+  f('dur').textContent = op && op.tEnd ? fmtDur(op.tEnd - op.t0) : '—';
+  f('stage').textContent = op ? (op.status === 'rejected' ? '—' : (PHASES.find(x => x[0] === op.stage) || ['', op.stage])[1]) : '—';
+  f('opid').textContent = op && !op.id.startsWith('local-') ? cut(op.id, 8) : '—';
+
+  const m = f('motor');
+  if (m) {
+    const chipEl = f('motor-chip'), ms = f('motor-status'), run = motorRunning(s);
+    if (run) { chipEl.className = 'chip warn'; chipEl.textContent = 'Possivelmente em movimento'; ms.textContent = `${s.motor.cmd} confirmado às ${fmtTime(s.motor.t)}. O firmware não informa o estado do motor; considera-se em movimento até ${fmtTime(s.motor.until)}.${s.motor.unconfirmed ? ' Resultado não confirmado; sem reenvio.' : ''}`; }
+    else if (s.motor.cmd) { chipEl.className = 'chip muted'; chipEl.textContent = s.motor.cmd === 'PARE' ? 'PARE confirmado' : 'Tempo estimado encerrado'; ms.textContent = `Último comando de motor: ${s.motor.cmd} às ${fmtTime(s.motor.t)}.${s.motor.unconfirmed ? ' Resultado não confirmado; sem reenvio.' : ''}`; }
+    else { chipEl.className = 'chip muted'; chipEl.textContent = 'Sem confirmação'; ms.textContent = 'Nenhum comando de motor confirmado nesta sessão.'; }
+    const miss = ['START', 'PARE'].filter(c => !a.capabilities.includes(c));
+    if (miss.length) ms.textContent += ` Não cadastrado no Registry: ${miss.join(', ')}.`;
+    void hasMove;
+  }
+  if (f('leds')) {
+    for (const b of el.querySelectorAll('[data-led-cmd]')) {
+      const off = !canSend(id, b.dataset.ledCmd);
+      b.disabled = off; b.title = off ? disabledReason(id, b.dataset.ledCmd) : '';
+    }
+    for (const [cor, , color] of LED_CORES) {
+      const d = el.querySelector(`[data-led-dot="${cor}"]`), on = s.leds[cor.toUpperCase()];
+      d.style.background = color; d.style.opacity = on === null ? '.25' : on ? '1' : '.25';
+      d.title = on === null ? 'Estado desconhecido' : on ? 'Ligado' : 'Desligado';
+    }
+    f('leds-note').textContent = s.leds.t ? `Última confirmação às ${fmtTime(s.leds.t)}. Os LEDs mantêm o estado após o fim da sessão.` : 'Estado desconhecido. Use "Consultar estado". Os LEDs mantêm o estado após o fim da sessão.';
+  }
+  if (f('sensors')) updateCharts(el, s);
+
+  const ops = s.order.slice(-20).reverse().map(i => s.ops.get(i)).filter(Boolean);
+  const osig = JSON.stringify(ops.map(o => [o.id, o.status, o.tEnd]));
+  const tb = f('ops');
+  if (tb.dataset.sig !== osig) {
+    tb.dataset.sig = osig;
+    tb.replaceChildren(...ops.map(o => h('tr', null, h('td', { class: 'mono faint', text: fmtTime(o.t0) }), h('td', { class: 'mono', text: opSummary(o) }), h('td', null, chip((STATUS_UI[o.status] || ['', 'muted'])[1], (STATUS_UI[o.status] || [o.status])[0])), h('td', { class: 'mono', text: o.tEnd ? fmtDur(o.tEnd - o.t0) : '—' }), h('td', { class: 'mono dim', text: cut(o.status === 'confirmed' ? o.stdout : (o.reason || o.stderr), 90) }))));
+  }
+  const lg = S.logs.filter(l => l.agent === id), lsig = lg.length + ':' + (lg.length ? lg[lg.length - 1].t : 0), le = f('log');
+  if (le.dataset.sig !== lsig) { le.dataset.sig = lsig; le.replaceChildren(...lg.slice(-60).map(logLine)); }
 }
-function disarm(agentID) { const ps=panelState(agentID);ps.armedCmd=null;ps.armedAt=0;clearTimeout(ps.armTimer);updatePanel(agentID); }
-function updateMotor(panel,agentID) {
-  if(!panel)return;const note=field(panel,'motor-note');if(!note)return;const m=panelState(agentID).motor;if(!m.cmd){note.textContent='Nenhum comando de motor confirmado nesta guia.';return;}
-  const running=(m.cmd==='START'||m.cmd==='MOVER')&&Date.now()<m.until;note.textContent=`Último comando: ${m.cmd} às ${fmtTime(m.t)}. ${running?'Motor possivelmente em movimento.':m.cmd==='PARE'?'PARE confirmado.':'Tempo estimado encerrado.'}${m.unconfirmed?' Result não confirmado; sem reenvio.':''}`;
+
+// ----- gráficos -----
+function lastValid(s, qid) { const a = s.samples[qid]; for (let i = a.length - 1; i >= 0; i--) if (a[i].v != null) return a[i]; return null; }
+function niceStep(range, n) { const raw = range / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
+const M = { r: 10, t: 18, b: 22, h: 150 };
+const plotWidth = el => Math.max(200, el.clientWidth || 280);
+function updateCharts(el, s) {
+  if (!s.chartsDirty) return;
+  s.chartsDirty = false;
+  const now = Date.now();
+  for (const q of QTY) {
+    const card = el.querySelector(`[data-q="${q.id}"]`); if (!card) continue;
+    const f = k => card.querySelector(`[data-f="${k}"]`), plot = f('plot'), emptyEl = f('empty');
+    for (const old of plot.querySelectorAll('svg')) old.remove();
+    const all = s.samples[q.id], inWin = all.filter(x => x.t >= now - s.win), valid = inWin.filter(x => x.v != null), bad = inWin.filter(x => x.v == null);
+    const last = lastValid(s, q.id), lastAny = all.length ? all[all.length - 1] : null;
+    f('num').textContent = last ? last.v.toFixed(q.dec) : '—'; f('num').className = 'cc-num' + (last ? '' : ' muted');
+    f('state').textContent = !lastAny ? 'Sem dados' : lastAny.v == null ? 'Última leitura inválida' : (now - lastAny.t > CFG.staleMs ? `Desatualizada (${fmtAgo(now - lastAny.t)})` : 'Atualizada');
+    f('time').textContent = last ? `Última válida: ${fmtTime(last.t)}` : '';
+    const foot = [];
+    if (lastAny && lastAny.v == null) foot.push(`Última amostra inválida: ${lastAny.bad}`);
+    if (all.length) foot.push(`${valid.length} válida(s)${bad.length ? ', ' + bad.length + ' inválida(s)' : ''} em ${WINDOWS.find(w => w.ms === s.win).label}`);
+    if (q.note) foot.push(q.note);
+    f('foot').textContent = foot.join(' · ');
+    if (!valid.length && !bad.length) {
+      emptyEl.textContent = all.length ? 'Nenhuma amostra na janela selecionada.' : 'Sem amostras. Use "Ler" ou "Ler todos os sensores".';
+      emptyEl.classList.remove('hidden'); plot.append(drawAxesOnly(plot)); card.setAttribute('aria-label', `${q.name}: sem amostras`); continue;
+    }
+    emptyEl.classList.add('hidden');
+    plot.append(drawChart(plot, q, valid, bad, now, s.win));
+    card.setAttribute('aria-label', `${q.name}: ${last ? last.v.toFixed(q.dec) + ' ' + q.unit + ' às ' + fmtTime(last.t) : 'sem valor válido'}; ${valid.length} amostras válidas na janela`);
+  }
 }
-function parseValue(text,q) { const match=/^(-?\d+(?:\.\d+)?)\s*(C|Pa|m|A|cm)$/.exec(String(text??'').trim());if(!match||match[2]!==q.fw)return{ok:false};const value=Number(match[1]);if(q.id==='distancia'&&value<0)return{ok:false};return{ok:true,value:q.conv?q.conv(value):value}; }
-function ingestResult(agentID,op) {
-  if(op.status!=='confirmed')return;let values={};
-  if(op.cmd==='LER_SENSORES'){for(const part of op.stdout.split('|')){const i=part.indexOf('=');if(i>0)values[part.slice(0,i).trim()]=part.slice(i+1).trim();}}
-  else if(QTY.some(q=>q.cap===op.cmd))values[op.cmd]=op.stdout;else return;
-  const ps=panelState(agentID);
-  for(const q of QTY){if(!(q.key in values))continue;const key=op.id+':'+q.id;if(ps.seen.has(key))continue;ps.seen.add(key);const parsed=parseValue(values[q.key],q);ps.samples[q.id].push({t:op.tEnd,v:parsed.ok?parsed.value:null,op:op.id});if(ps.samples[q.id].length>CFG.maxSamples)ps.samples[q.id].shift();}
+function drawAxesOnly(el) {
+  const w = plotWidth(el), svg = sv('svg', { viewBox: `0 0 ${w} ${M.h}`, width: w, height: M.h, 'aria-hidden': 'true' });
+  svg.append(sv('line', { class: 'ax', x1: 40, y1: M.t, x2: 40, y2: M.h - M.b }), sv('line', { class: 'ax', x1: 40, y1: M.h - M.b, x2: w - M.r, y2: M.h - M.b }));
+  return svg;
 }
-function lastSample(samples) { for(let i=samples.length-1;i>=0;i--)if(samples[i].v!=null)return samples[i];return null; }
-function updateCharts(panel,agentID) {
-  const ps=panelState(agentID);for(const q of QTY){const card=panel.querySelector(`[data-q="${q.id}"]`);if(!card)continue;const samples=ps.samples[q.id],last=lastSample(samples),lastAny=samples.at(-1);card.querySelector('[data-f="value"]').textContent=last?last.v.toFixed(q.dec):'—';card.querySelector('[data-f="sample-state"]').textContent=!lastAny?'Sem amostras':lastAny.v==null?'Última leitura inválida':`${samples.length} amostra(s)`;drawChart(card.querySelector('[data-f="plot"]'),samples,q);}
+function drawChart(el, q, valid, bad, now, win) {
+  const w = plotWidth(el), ih = M.h - M.t - M.b;
+  const svg = sv('svg', { viewBox: `0 0 ${w} ${M.h}`, width: w, height: M.h, role: 'img', 'aria-hidden': 'true' });
+  let lo = Infinity, hi = -Infinity;
+  for (const x of valid) { if (x.v < lo) lo = x.v; if (x.v > hi) hi = x.v; }
+  if (!valid.length) { lo = 0; hi = 1; }
+  if (hi - lo < 1e-9) { const d = Math.max(Math.abs(hi) * .05, Math.pow(10, -q.dec)); lo -= d; hi += d; }
+  const padY = (hi - lo) * .12; lo -= padY; hi += padY;
+  const step = niceStep(hi - lo, 4), yTop = Math.ceil(hi / step) * step, yBot = Math.floor(lo / step) * step;
+  const dec = Math.max(0, Math.min(4, -Math.floor(Math.log10(step) + 1e-9)));
+  const ticks = []; for (let v = yBot; v <= yTop + step / 2; v += step) ticks.push(v);
+  const labels = ticks.map(v => v.toFixed(dec));
+  const ml = Math.max(34, Math.max(...labels.map(l => l.length)) * 6.2 + 12), iw = w - ml - M.r;
+  const ys = v => M.t + (1 - (v - yBot) / (yTop - yBot)) * ih;
+  const firstT = Math.min(...valid.concat(bad).map(x => x.t));
+  let x0 = Math.max(now - win, firstT - 2000); if (now - x0 < 30000) x0 = now - 30000;
+  const xs = t => ml + ((t - x0) / (now - x0)) * iw;
+  ticks.forEach((v, i) => { const y = ys(v); svg.append(sv('line', { class: 'grid', x1: ml, y1: y, x2: w - M.r, y2: y }), sv('text', { class: 'tick', x: ml - 6, y: y + 3, 'text-anchor': 'end' }, labels[i])); });
+  svg.append(sv('text', { class: 'tick unit', x: ml + 4, y: 10 }, q.unit));
+  svg.append(sv('line', { class: 'ax', x1: ml, y1: M.t, x2: ml, y2: M.h - M.b }), sv('line', { class: 'ax', x1: ml, y1: M.h - M.b, x2: w - M.r, y2: M.h - M.b }));
+  const nt = w < 360 ? 3 : 4;
+  for (let i = 0; i <= nt; i++) { const t = x0 + (i / nt) * (now - x0); svg.append(sv('text', { class: 'tick', x: ml + (i / nt) * iw, y: M.h - 6, 'text-anchor': i === 0 ? 'start' : i === nt ? 'end' : 'middle' }, fmtTime(t, win <= 3600e3 && (now - x0) < 3600e3))); }
+  if (valid.length > 1) svg.append(sv('polyline', { class: 'line', points: valid.map(x => `${xs(x.t).toFixed(1)},${ys(x.v).toFixed(1)}`).join(' ') }));
+  if (valid.length <= 80) for (const x of valid) { const c = sv('circle', { class: 'pt', cx: xs(x.t).toFixed(1), cy: ys(x.v).toFixed(1), r: 2.5 }); c.append(sv('title', {}, `${x.v.toFixed(q.dec)} ${q.unit} · ${fmtTime(x.t)}`)); svg.append(c); }
+  if (valid.length) { const x = valid[valid.length - 1]; svg.append(sv('circle', { class: 'pt-last', cx: xs(x.t).toFixed(1), cy: ys(x.v).toFixed(1), r: 4 })); }
+  for (const x of bad) { const px = xs(x.t), y = M.h - M.b, g = sv('g', {}); g.append(sv('line', { class: 'bad', x1: px - 3, y1: y - 6, x2: px + 3, y2: y }), sv('line', { class: 'bad', x1: px - 3, y1: y, x2: px + 3, y2: y - 6 }), sv('title', {}, `Inválida · ${fmtTime(x.t)} · ${x.bad}`)); svg.append(g); }
+  return svg;
 }
-function drawChart(root,samples,q) {
-  const NS='http://www.w3.org/2000/svg',width=260,height=110,left=34,right=8,top=12,bottom=18;
-  const make=(tag,attrs,text)=>{const el=document.createElementNS(NS,tag);for(const[k,v]of Object.entries(attrs))el.setAttribute(k,v);if(text!=null)el.textContent=text;return el;};
-  const svg=make('svg',{viewBox:`0 0 ${width} ${height}`,role:'img','aria-label':`Histórico de ${q.name}`});svg.append(make('line',{class:'axis',x1:left,y1:top,x2:left,y2:height-bottom}),make('line',{class:'axis',x1:left,y1:height-bottom,x2:width-right,y2:height-bottom}));
-  const valid=samples.filter(s=>s.v!=null);if(valid.length){let lo=Math.min(...valid.map(s=>s.v)),hi=Math.max(...valid.map(s=>s.v));if(lo===hi){lo-=1;hi+=1;}const x=i=>left+i*(width-left-right)/Math.max(1,valid.length-1),y=v=>top+(hi-v)*(height-top-bottom)/(hi-lo);svg.append(make('text',{class:'tick',x:left-4,y:top+3,'text-anchor':'end'},hi.toFixed(q.dec)),make('text',{class:'tick',x:left-4,y:height-bottom,'text-anchor':'end'},lo.toFixed(q.dec)));if(valid.length>1)svg.append(make('polyline',{class:'line',points:valid.map((s,i)=>`${x(i)},${y(s.v)}`).join(' ')}));valid.forEach((s,i)=>svg.append(make('circle',{class:'point',cx:x(i),cy:y(s.v),r:i===valid.length-1?3:2})));}
-  root.replaceChildren(svg);
+
+// ----- operações e eventos (todos os agentes) -----
+function logLine(l, withAgent) {
+  return h('div', { class: 'log-line ' + l.type }, h('span', { class: 't', text: fmtTime(l.t) }),
+    h('span', { class: 'm', text: (withAgent && l.agent ? `[${l.agent}] ` : '') + (l.op && !l.op.startsWith('local-') ? `[${cut(l.op, 8)}] ` : '') + l.msg }));
 }
-function updateHistory(panel,agentID) {
-  const ps=panelState(agentID),tbody=field(panel,'ops');tbody.replaceChildren(...ps.order.slice(-20).reverse().map(id=>ps.ops.get(id)).filter(Boolean).map(op=>h('tr',null,h('td',{class:'mono',text:op.cmd||'?'}),h('td',{text:op.status}),h('td',{class:'mono',text:op.tEnd?fmtDuration(op.tEnd-op.t0):'—'}),h('td',{class:'mono',text:cut(op.status==='confirmed'?op.stdout:op.reason||'',90)}))));
-  field(panel,'log').replaceChildren(...ps.logs.map(item=>h('div',{class:item.type,text:`${fmtTime(item.t)} ${item.message}`})));
+function renderOps() {
+  const ops = [];
+  for (const s of S.st.values()) if (!S.filter || s.id === S.filter) for (const id of s.order) { const o = s.ops.get(id); if (o) ops.push(o); }
+  ops.sort((a, b) => b.t0 - a.t0);
+  const view = ops.slice(0, 200);
+  if (sigSkip('ops', [S.filter, view.map(o => [o.id, o.status, o.stage, o.tEnd])])) return;
+  $('ops-empty').classList.toggle('hidden', view.length > 0);
+  $('ops-table').classList.toggle('hidden', view.length === 0);
+  $('ops-table').querySelector('tbody').replaceChildren(...view.map(o => {
+    const [t, c] = STATUS_UI[o.status] || [o.status, 'muted'], res = o.status === 'confirmed' ? o.stdout : (o.reason || o.stderr || '');
+    return h('tr', null, h('td', { class: 'mono faint', text: fmtTime(o.t0) }), h('td', { class: 'mono', text: o.agent }), h('td', { class: 'mono', text: opSummary(o) }),
+      h('td', null, chip(c, t)), h('td', { class: 'dim', text: o.status === 'rejected' ? '—' : (PHASES.find(p => p[0] === o.stage) || ['', o.stage])[1] }),
+      h('td', { class: 'mono dim', text: cut(res, 160) }), h('td', { class: 'mono faint', text: o.id.startsWith('local-') ? '—' : cut(o.id, 8) }));
+  }));
 }
-function init(){connectSSE();loadAgents();setInterval(loadAgents,CFG.pollMs);setInterval(()=>{for(const id of S.selected)updateMotor($('panel-'+id),id);},1000);}
-init();
+function renderLog() {
+  const lg = S.logs.filter(l => !S.filter || l.agent === S.filter || (!l.agent && false));
+  if (sigSkip('log', [S.filter, lg.length, lg.length ? lg[lg.length - 1].t : 0])) return;
+  const el = $('log'), near = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  el.replaceChildren(...lg.map(l => logLine(l, true)));
+  if (near) el.scrollTop = el.scrollHeight;
+}
+
+// ============================================================
+// NAVEGAÇÃO
+// ============================================================
+function buildNav() {
+  const nav = $('nav');
+  for (const [id, label] of VIEWS) nav.append(h('button', { type: 'button', class: 'tab', role: 'tab', id: 'tab-' + id, 'aria-controls': 'view-' + id, 'aria-selected': 'false', tabindex: '-1', onclick: () => showView(id) }, h('span', { text: label }), h('span', { class: 'tab-badge', 'data-badge': id })));
+  nav.addEventListener('keydown', e => {
+    if (!['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
+    const i = VIEWS.findIndex(v => v[0] === S.view); let n = i;
+    if (e.key === 'Home') n = 0; else if (e.key === 'End') n = VIEWS.length - 1; else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') n = (i + 1) % VIEWS.length; else n = (i - 1 + VIEWS.length) % VIEWS.length;
+    e.preventDefault(); showView(VIEWS[n][0]); $('tab-' + VIEWS[n][0]).focus();
+  });
+}
+function showView(id) {
+  S.view = id; S.sig = {};
+  for (const [v] of VIEWS) { $('view-' + v).classList.toggle('hidden', v !== id); const t = $('tab-' + v); t.setAttribute('aria-selected', v === id ? 'true' : 'false'); t.tabIndex = v === id ? 0 : -1; }
+  for (const s of S.st.values()) s.chartsDirty = true;
+  schedule();
+  if (id === 'events') requestAnimationFrame(() => { const el = $('log'); el.scrollTop = el.scrollHeight; });
+  try { history.replaceState(null, '', location.pathname + location.search + '#' + id); } catch (e) { /* ignora */ }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  buildNav();
+  $('sel-all').addEventListener('click', () => { for (const a of agentList()) S.selected.add(a.agent_id); saveSelection(); if (S.selected.size && S.view !== 'panels') showView('panels'); schedule(); });
+  $('sel-none').addEventListener('click', () => { S.selected.clear(); saveSelection(); schedule(); });
+  const start = (location.hash || '').slice(1);
+  showView(VIEWS.some(v => v[0] === start) ? start : 'overview');
+  log(null, 'info', 'Dashboard v6.0 pronto');
+  connectSSE(); loadAgents();
+  setInterval(loadAgents, CFG.pollMs);
+  setInterval(() => { for (const s of S.st.values()) s.chartsDirty = true; schedule(); }, 15000);   // avança o eixo de tempo e a idade das leituras
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { for (const s of S.st.values()) s.chartsDirty = true; if (S.view === 'panels') schedule(); }).observe($('panels'));
+  schedule();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 </script>
 </body>
 </html>
